@@ -1,0 +1,14 @@
+digraph ParseTree {
+  node [shape=egg,  style=filled color = cyan];
+  node0 [label="program"];
+  node1 [label="contenido"];
+  node0 -> node1;
+  node2 [label="expresion"];
+  node1 -> node2;
+  node3 [label="valores"];
+  node2 -> node3;
+  node4 [label="valor"];
+  node3 -> node4;
+  node5 [label="10"];
+  node4 -> node5;
+}

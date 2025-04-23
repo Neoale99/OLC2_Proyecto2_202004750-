@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/theme/dracula.min.css">
+    <link rel="stylesheet" href="styles.css"> <!-- Referencia al archivo CSS -->
+    <title>GoLight</title>
+</head>
+<body>
+    <!-- Barra de Menú -->
+    <div class="menu-bar">
+        <button id="btnArchivo">Archivo</button>
+        <div id="menuArchivo" class="menu-dropdown">
+            <button id="nuevoArchivo">Nuevo archivo</button>
+            <button id="guardarArchivo">Guardar archivo</button>
+            <button id="abrirArchivo">Abrir archivo</button>
+        </div>
+        <button id="btnEjecutar">Ejecutar</button>
+        <button id="btnReportes">Reportes</button>
+        <div id="menuReportes" class="menu-dropdown">
+            <button id="reporteErrores">Reporte de errores</button>
+            <button id="generarArbol">Generar árbol de análisis sintáctico</button>
+            <button id="generarTablaSimbolos">Generar tabla de símbolos</button>
+        </div>
+    </div>
+
+    <!-- Contenedor Principal -->
+    <div class="container">
+        <!-- Entrada con números de línea -->
+        <div class="entrada-container">
+            <label for="entrada">Entrada:</label>
+            <div class="fixed-container">
+                <textarea id="entrada" placeholder="Ingresa tu texto aquí"></textarea>
+            </div>
+        </div>
+
+        <!-- Consola con números de línea -->
+        <div class="entrada-container">
+            <label for="consola">Consola:</label>
+            <div class="fixed-container">
+                <textarea id="consola" placeholder="Salida de la consola" readonly></textarea>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/javascript/javascript.min.js"></script>
+    <script src="scripts.js"></script> <!-- Referencia al archivo JavaScript -->
+</body>
+</html>
