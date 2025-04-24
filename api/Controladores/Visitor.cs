@@ -16,10 +16,11 @@ public class Visitor : GolightBaseVisitor<Object>
     private StringBuilder _dataSection = new StringBuilder();
     private StringBuilder _textSection = new StringBuilder();
     private StringBuilder _entrySection = new StringBuilder();
-    private bool _hasStart = false;
-
+    private string tipo = "";
+    private string cadena = "";
+    
     private bool _condicionCumplida = false; 
-    private bool _TieneStart = false;
+    
     public Visitor()
     {
 
@@ -55,7 +56,7 @@ public class Visitor : GolightBaseVisitor<Object>
         }
         string tablaHTML = GenerarTablaSimbolos(tmp);
         string path = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "TablaSimbolos.html");
-        File.WriteAllText(path, tablaHTML);
+        //File.WriteAllText(path, tablaHTML);
         return null;
     }
 
@@ -73,13 +74,39 @@ public class Visitor : GolightBaseVisitor<Object>
 public override Object VisitPrintln(GolightParser.PrintlnContext context)
     {
         codigo.comentario("Print");
-        foreach (var exp in context.expresion()) //Implementacion temporal unicamente para sumas y restas
+        foreach (var exp in context.expresion()) //Implementacion temporal unicamente para operaciones basicas con enteros.
         {
             Visit(exp);
             codigo.comentario("Imprimiendo");
-            codigo.pop(Registers.x0); // Sacamos el valor de la pila
-            codigo.Printint(Registers.x0); // Imprimimos el valor
-
+            switch (tipo)
+            {
+                case "int":
+                    codigo.comentario($"Imprimiendo entero: {Registers.x0}");
+                    codigo.pop(Registers.x0); // Sacamos el valor de la pila
+                    codigo.Printint(Registers.x0); // Imprimimos el valor
+                    tipo = ""; // Reiniciamos el tipo
+                    break;
+                case "string":
+                    codigo.comentario($"Imprimiendo cadena: {cadena}");
+                    codigo.Printstr(cadena); // Imprimimos la cadena
+                    cadena = ""; // Reiniciamos la cadena
+                    tipo = ""; // Reiniciamos el tipo
+                    break;
+                case "float":
+                    // Implementar la lógica para imprimir float
+                    break;
+                case "bool":
+                    // Implementar la lógica para imprimir bool
+                    break;
+                case "rune":
+                    codigo.comentario($"Imprimiendo rune: {cadena}");
+                    codigo.Printstr(cadena); 
+                    cadena = ""; 
+                    tipo = ""; 
+                    break;
+                default:
+                    throw new Exception($"Tipo no soportado para impresión: {tipo}");
+            }
         }
         return null;
     }
@@ -96,28 +123,39 @@ public override Object VisitPrintln(GolightParser.PrintlnContext context)
         codigo.comentario($"Entero: {entero}");
         codigo.mov(Registers.x0, int.Parse(entero));
         codigo.push(Registers.x0);
+        tipo = "int";
         return null;
     }
 
     public override Object VisitFloat64(GolightParser.Float64Context context)
     {
+        tipo = "float";
         return null;
     }
     public override Object VisitString(GolightParser.StringContext context)
     {
+        cadena = context.GetText();
+        cadena = cadena.Substring(1, cadena.Length - 2); 
+        tipo = "string";
+
         return null;
     }
     public override Object VisitBool(GolightParser.BoolContext context)
     {
+        tipo = "bool";
         return null;
     }
 
     public override Object VisitRune(GolightParser.RuneContext context)
     {
+        cadena = context.GetText();
+        cadena = cadena.Substring(1, cadena.Length - 2); // Eliminar comillas
+        tipo = "rune";
         return null;
     }
     public override Object VisitNull(GolightParser.NullContext context)
     {
+        tipo = "nil";
         return null;
     }
 
@@ -193,6 +231,30 @@ public override Object VisitDeclaracionimplicita(GolightParser.Declaracionimplic
 
     public override Object VisitMultdivmod(GolightParser.MultdivmodContext context)
     {
+        var operacion = context.op.Text;
+        Console.WriteLine(context.GetText());
+        Visit(context.expresion(0)); //Conseguimos el primer valor
+        Visit(context.expresion(1)); //Conseguimos el segundo valor        
+        codigo.pop(Registers.x1); //Cargamos el segundo valor en x1
+        codigo.pop(Registers.x0); //Cargamos el primer valor en x0
+        codigo.comentario($"Popeados ambos valores");
+        if (operacion == "*")
+        {
+            codigo.mul(Registers.x0, Registers.x0, Registers.x1); //x0 = Valor 1 * Valor 2
+        }
+        else if (operacion == "/")
+        {
+            codigo.div(Registers.x0, Registers.x0, Registers.x1); //x0 = Valor 1 / Valor 2
+        }
+        else if (operacion == "%")
+        {
+            codigo.mod(Registers.x0, Registers.x0, Registers.x1); //x0 = Valor 1 % Valor 2
+        }
+        else 
+        {
+            throw new Exception($"Operación no soportada: {operacion}");
+        }
+        codigo.push(Registers.x0); //Guardamos el resultado en la pila
         return null;
     }
 
