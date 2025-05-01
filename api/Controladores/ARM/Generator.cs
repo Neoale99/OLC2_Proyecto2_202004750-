@@ -93,6 +93,24 @@ public class GeneradorARM{
         instruccionesARM.Add($"ADD SP, SP, #{alignedSize}");
     }
 
+//Implemenacion del flotante
+    public void LoadFloatBits(double value)
+    {
+        ulong bits = BitConverter.DoubleToUInt64Bits(value);
+        comentario($"Cargando valor flotante {value} (bits: 0x{bits:X16})");
+        instruccionesARM.Add($"MOVZ x0, #0x{bits & 0xFFFF:X4}");
+        instruccionesARM.Add($"MOVK x0, #0x{(bits >> 16) & 0xFFFF:X4}, LSL #16");
+        instruccionesARM.Add($"MOVK x0, #0x{(bits >> 32) & 0xFFFF:X4}, LSL #32");
+        instruccionesARM.Add($"MOVK x0, #0x{(bits >> 48) & 0xFFFF:X4}, LSL #48");
+        instruccionesARM.Add($"FMOV d0, x0");
+       // pushFloat("d0");
+    }
+    public void PrintFloat()
+    {
+        stdlib.Use("print_float_asm");
+        instruccionesARM.Add($"BL print_float_asm");
+    }
+
     public void comentario(string comentario){
         instruccionesARM.Add($"// {comentario}");
     }

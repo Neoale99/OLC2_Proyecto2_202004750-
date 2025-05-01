@@ -93,7 +93,8 @@ public override Object VisitPrintln(GolightParser.PrintlnContext context)
                     tipo = ""; // Reiniciamos el tipo
                     break;
                 case "float":
-                    // Implementar la lógica para imprimir float
+                    codigo.comentario("Imprimiendo flotante");
+                    codigo.PrintFloat();
                     break;
                 case "bool":
                     // Implementar la lógica para imprimir bool
@@ -129,6 +130,10 @@ public override Object VisitPrintln(GolightParser.PrintlnContext context)
 
     public override Object VisitFloat64(GolightParser.Float64Context context)
     {
+        var flotante = context.GetText();
+        double valflotante = double.Parse(flotante);
+        codigo.comentario($"Flotante: {flotante}");
+        codigo.LoadFloatBits(valflotante);
         tipo = "float";
         return null;
     }

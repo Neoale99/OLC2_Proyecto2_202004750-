@@ -213,7 +213,189 @@ public class StandardLibrary
         mov x0, #0
         mov x1, #1                  // Error flag
         b modulo_return
-    "}
+    "} ,
+ { "print_float_asm", @"
+    //--------------------------------------------------------------
+    // print_float_asm - Imprime un número de punto flotante 
+    //
+    // Input:
+    //   d0 - El valor flotante a imprimir
+    //--------------------------------------------------------------
+    print_float_asm:
+        // Guardar registros
+        stp x29, x30, [sp, #-16]!
+        stp x19, x20, [sp, #-16]!
+        stp x21, x22, [sp, #-16]!
+        stp x23, x24, [sp, #-16]!
+        stp d8, d9, [sp, #-16]!
+        
+        // Guardar el valor original
+        fmov d8, d0
+        
+        // Comprobar si el número es negativo
+        fmov x0, d0
+        lsr x1, x0, #63         // Obtener el bit de signo (bit 63)
+        cbz x1, 1f              // Si es 0, el número es positivo (usamos etiqueta local)
+        
+        // Imprimir signo negativo si es necesario
+        mov x0, #1              // fd stdout
+        adr x1, float_minus     // dirección del signo menos
+        mov x2, #1              // longitud 1
+        mov x8, #64             // syscall write
+        svc #0
+        
+        // Hacer el valor positivo para procesarlo
+        fneg d8, d8
+        
+    1:  // float_positive
+        .align 4                // Asegurar alineación
+        // Extraer la parte entera
+        fcvtzs x19, d8          // Convertir a entero con redondeo hacia cero (truncar)
+        scvtf d9, x19           // Convertir de nuevo a flotante para obtener la parte entera exacta
+        fsub d8, d8, d9         // d8 ahora tiene solo la parte fraccionaria
+        
+        // Imprimir la parte entera usando print_integer_local que es una versión modificada
+        // para funcionar con nuestra implementación
+        mov x0, x19
+        
+        // Esta es la llamada que imprime la parte entera
+        // Si está fallando, debemos verificar que esta subrutina funcione correctamente
+        bl int_print_part
+        
+        // Imprimir el punto decimal
+        mov x0, #1              // fd stdout
+        adr x1, float_point     // dirección del punto
+        mov x2, #1              // longitud 1
+        mov x8, #64             // syscall write
+        svc #0
+        
+        // Procesar la parte fraccionaria
+        mov x23, #6             // Precisión (6 dígitos después del punto)
+        mov x21, #10            // Base decimal
+        fcvt s8, d8             // Convertir a float para mejor precisión en operaciones repetidas
+        
+    3:  // print_fraction
+        .align 4                // Asegurar alineación
+        // Multiplicar la parte fraccionaria por 10
+        fmov s9, #10.0
+        fmul s8, s8, s9
+        
+        // Extraer el dígito
+        fcvtzs x22, s8
+        scvtf s9, x22
+        fsub s8, s8, s9
+        
+        // Imprimir el dígito
+        add x22, x22, #48       // Convertir a ASCII
+        // Empujar al stack y usarlo como buffer
+        sub sp, sp, #16
+        strb w22, [sp]
+        
+        mov x0, #1              // fd stdout
+        mov x1, sp              // dirección del dígito
+        mov x2, #1              // longitud 1
+        mov x8, #64             // syscall write
+        svc #0
+        
+        add sp, sp, #16         // Restaurar stack
+        
+        subs x23, x23, #1       // Decrementar contador de precisión
+        bne 3b                  // Si no es cero, continuar (b hacia atrás a la etiqueta 3)
+        
+        // Imprimir nueva línea
+        mov x0, #1              // fd stdout
+        adr x1, float_nl        // dirección del newline
+        mov x2, #1              // longitud 1
+        mov x8, #64             // syscall write
+        svc #0
+        
+        // Restaurar registros y retornar
+        ldp d8, d9, [sp], #16
+        ldp x23, x24, [sp], #16
+        ldp x21, x22, [sp], #16
+        ldp x19, x20, [sp], #16
+        ldp x29, x30, [sp], #16
+        ret
 
+    // Subrutina para imprimir solo la parte entera de un número
+    int_print_part:
+        .align 4                // Asegurar alineación
+        stp x29, x30, [sp, #-16]!
+        
+        // Reservar espacio para el buffer de dígitos (32 bytes)
+        sub sp, sp, #32
+        mov x1, sp
+        
+        // Si el entero es cero, manejo especial
+        cbnz x0, 4f             // Ir a int_not_zero si no es cero
+        mov w2, #48             // ASCII '0'
+        strb w2, [x1]
+        mov x2, #1              // Longitud 1
+        b 6f                    // Ir a int_print
+        
+    4:  // int_not_zero
+        .align 4                // Asegurar alineación
+        mov x2, #0              // Contador de dígitos
+        mov x21, #10            // Base 10 para divisiones
+        
+    5:  // int_loop
+        .align 4                // Asegurar alineación
+        // Dividir por 10 para obtener el dígito
+        udiv x3, x0, x21        // x3 = x0 / 10
+        msub x4, x3, x21, x0    // x4 = x0 - (x3 * 10) = x0 % 10
+        
+        // Convertir a ASCII y almacenar
+        add w4, w4, #48         // Convertir a ASCII
+        strb w4, [x1, x2]       // Almacenar en buffer
+        add x2, x2, #1          // Incrementar contador
+        
+        // Continuar con el cociente
+        mov x0, x3              // Siguiente número a procesar
+        cbnz x0, 5b             // Si no es cero, continuar (b hacia atrás a la etiqueta 5)
+        
+        // Invertir los dígitos (están en orden inverso)
+        mov x3, #0              // Índice inicial
+    7:  // int_reverse
+        .align 4                // Asegurar alineación
+        cmp x3, x2, lsr #1      // Comparar con la mitad de la longitud
+        bge 6f                  // Si ya llegamos a la mitad, terminar (ir a int_print)
+        
+        // Intercambiar dígitos
+        sub x4, x2, x3          // x4 = longitud - índice
+        sub x4, x4, #1          // x4 = longitud - índice - 1
+        
+        ldrb w5, [x1, x3]       // Cargar dígito del inicio
+        ldrb w6, [x1, x4]       // Cargar dígito del final
+        strb w6, [x1, x3]       // Guardar dígito del final en el inicio
+        strb w5, [x1, x4]       // Guardar dígito del inicio en el final
+        
+        add x3, x3, #1          // Incrementar índice
+        b 7b                    // Volver al bucle reverse (b hacia atrás a la etiqueta 7)
+        
+    6:  // int_print
+        .align 4                // Asegurar alineación
+        // Imprimir los dígitos (sin agregar nueva línea)
+        mov x0, #1              // fd stdout
+        // x1 ya tiene la dirección
+        // x2 ya tiene la longitud
+        mov x8, #64             // syscall write
+        svc #0
+        
+        // Liberar buffer y retornar
+        add sp, sp, #32
+        ldp x29, x30, [sp], #16
+        ret
+
+    .align 4                    // Asegurar alineación
+    float_minus:
+        .ascii ""-""
+        .align 4                // Asegurar alineación
+    float_point:
+        .ascii "".""
+        .align 4                // Asegurar alineación
+    float_nl:
+        .ascii ""\n""
+        .align 4                // Asegurar alineación
+    "}
     };
 }
