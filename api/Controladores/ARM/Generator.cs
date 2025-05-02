@@ -183,5 +183,34 @@ public class GeneradorARM{
         sb.AppendLine(stdlib.GetFunctionDefinitions());
         return sb.ToString();
     }
+    // Metodos para ciclos 
+    public void cmp(string rs1, int value)
+    {
+        instruccionesARM.Add($"CMP {rs1}, #{value}");
+    }
 
+    public void cmp(string rs1, string rs2)
+    {
+        instruccionesARM.Add($"CMP {rs1}, {rs2}");
+    }
+
+    public void b(string etiqueta)
+    {
+        instruccionesARM.Add($"B {etiqueta}");
+    }
+
+    public void bne(string etiqueta)
+    {
+        instruccionesARM.Add($"BNE {etiqueta}");
+    }
+
+    public void beq(string etiqueta)
+    {
+        instruccionesARM.Add($"BEQ {etiqueta}");
+    }
+
+    public void etiqueta(string nombre)
+    {
+        instruccionesARM.Add($"{nombre}:");
+    }
 }

@@ -21,6 +21,7 @@ public class Visitor : GolightBaseVisitor<Object>
     private bool _isdeclaracion = false;
     private bool _condicionCumplida = false; 
     private bool _comesfromasign = false;
+    public int etiquetaCount = 0;
     public Visitor()
     {
 
@@ -627,23 +628,271 @@ public override Object VisitSumres(GolightParser.SumresContext context)
         return null;
     }
 
-    public override Object VisitOr(GolightParser.OrContext context)
+public override Object VisitAnd(GolightParser.AndContext context)
+{
+    // Evaluamos la primera expresión
+    Visit(context.expresion(0));
+    string tipo1 = tipo;
+    string val1 = cadena;
+
+    // Verificar que sea booleano
+    if (tipo1 != "bool")
     {
-        return null;
+        throw new Exception($"El operador '&&' espera un booleano, pero recibió {tipo1}");
     }
 
-    public override Object VisitAnd(GolightParser.AndContext context)
+    // Evaluamos la segunda expresión
+    Visit(context.expresion(1));
+    string tipo2 = tipo;
+    string val2 = cadena;
+
+    // Verificar que sea booleano
+    if (tipo2 != "bool")
     {
+        throw new Exception($"El operador '&&' espera un booleano, pero recibió {tipo2}");
+    }
+
+    // Realizar operación AND
+    bool resultado = bool.Parse(val1) && bool.Parse(val2);
+    
+    tipo = "bool";
+    cadena = resultado.ToString().ToLower();
+    
+    return null;
+}
+
+    public override Object VisitOr(GolightParser.OrContext context)
+    {
+        // Evaluamos la primera expresión
+        Visit(context.expresion(0));
+        string tipo1 = tipo;
+        string val1 = cadena;
+
+        // Verificar que sea booleano
+        if (tipo1 != "bool")
+        {
+            throw new Exception($"El operador '||' espera un booleano, pero recibió {tipo1}");
+        }
+
+        // Evaluamos la segunda expresión
+        Visit(context.expresion(1));
+        string tipo2 = tipo;
+        string val2 = cadena;
+
+        // Verificar que sea booleano
+        if (tipo2 != "bool")
+        {
+            throw new Exception($"El operador '||' espera un booleano, pero recibió {tipo2}");
+        }
+
+        // Realizar operación OR
+        bool resultado = bool.Parse(val1) || bool.Parse(val2);
+        
+        tipo = "bool";
+        cadena = resultado.ToString().ToLower();
+        
         return null;
     }
 
     public override Object VisitIgualdad(GolightParser.IgualdadContext context)
     {
+        var operador = context.op.Text;
+        
+        // Evaluamos la primera expresión
+        Visit(context.expresion(0));
+        string tipo1 = tipo;
+        string val1;
+        
+        // Obtener valor de la primera expresión
+        if (context.expresion(0) is GolightParser.IdContext id1)
+        {
+            val1 = symbolTable.GetSymbol(id1.GetText()).Value;
+        }
+        else
+        {
+            val1 = context.expresion(0).GetText();
+        }
+
+        // Evaluamos la segunda expresión
+        Visit(context.expresion(1));
+        string tipo2 = tipo;
+        string val2;
+        
+        if (context.expresion(1) is GolightParser.IdContext id2)
+        {
+            val2 = symbolTable.GetSymbol(id2.GetText()).Value;
+        }
+        else
+        {
+            val2 = context.expresion(1).GetText();
+        }
+
+        // Comparación según tipos
+        if (tipo1 == "float" || tipo2 == "float")
+        {
+            double num1 = double.Parse(val1);
+            double num2 = double.Parse(val2);
+            bool resultado;
+
+            switch (operador)
+            {
+                case "==":
+                    resultado = Math.Abs(num1 - num2) < 0.000001; // Comparación de flotantes
+                    break;
+                case "!=":
+                    resultado = Math.Abs(num1 - num2) >= 0.000001;
+                    break;
+                default:
+                    throw new Exception($"Operador no válido: {operador}");
+            }
+
+            tipo = "bool";
+            cadena = resultado.ToString().ToLower();
+        }
+        else if (tipo1 == "int" && tipo2 == "int")
+        {
+            int num1 = int.Parse(val1);
+            int num2 = int.Parse(val2);
+            bool resultado;
+
+            switch (operador)
+            {
+                case "==":
+                    resultado = num1 == num2;
+                    break;
+                case "!=":
+                    resultado = num1 != num2;
+                    break;
+                default:
+                    throw new Exception($"Operador no válido: {operador}");
+            }
+
+            tipo = "bool";
+            cadena = resultado.ToString().ToLower();
+        }
+        else if (tipo1 == "string" && tipo2 == "string")
+        {
+            // Remover comillas para comparación
+            val1 = val1.Substring(1, val1.Length - 2);
+            val2 = val2.Substring(1, val2.Length - 2);
+            bool resultado;
+
+            switch (operador)
+            {
+                case "==":
+                    resultado = val1 == val2;
+                    break;
+                case "!=":
+                    resultado = val1 != val2;
+                    break;
+                default:
+                    throw new Exception($"Operador no válido: {operador}");
+            }
+
+            tipo = "bool";
+            cadena = resultado.ToString().ToLower();
+        }
+        else
+        {
+            throw new Exception($"No se pueden comparar tipos diferentes: {tipo1} y {tipo2}");
+        }
+
         return null;
     }
-
     public override Object VisitRelacionales(GolightParser.RelacionalesContext context)
     {
+        var operador = context.op.Text;
+        
+        // Evaluamos la primera expresión
+        Visit(context.expresion(0));
+        string tipo1 = tipo;
+        string val1;
+        
+        // Obtener valor de la primera expresión
+        if (context.expresion(0) is GolightParser.IdContext id1)
+        {
+            val1 = symbolTable.GetSymbol(id1.GetText()).Value;
+        }
+        else
+        {
+            val1 = context.expresion(0).GetText();
+        }
+
+        // Evaluamos la segunda expresión
+        Visit(context.expresion(1));
+        string tipo2 = tipo;
+        string val2;
+        
+        if (context.expresion(1) is GolightParser.IdContext id2)
+        {
+            val2 = symbolTable.GetSymbol(id2.GetText()).Value;
+        }
+        else
+        {
+            val2 = context.expresion(1).GetText();
+        }
+
+        // Si alguno es float, convertir ambos a float
+        if (tipo1 == "float" || tipo2 == "float")
+        {
+            double num1 = double.Parse(val1);
+            double num2 = double.Parse(val2);
+            bool resultado = false;
+
+            switch (operador)
+            {
+                case "<":
+                    resultado = num1 < num2;
+                    break;
+                case ">":
+                    resultado = num1 > num2;
+                    break;
+                case "<=":
+                    resultado = num1 <= num2;
+                    break;
+                case ">=":
+                    resultado = num1 >= num2;
+                    break;
+                default:
+                    throw new Exception($"Operador no válido: {operador}");
+            }
+
+            tipo = "bool";
+            cadena = resultado.ToString().ToLower();
+        }
+        // Si son enteros
+        else if (tipo1 == "int" && tipo2 == "int")
+        {
+            int num1 = int.Parse(val1);
+            int num2 = int.Parse(val2);
+            bool resultado = false;
+
+            switch (operador)
+            {
+                case "<":
+                    resultado = num1 < num2;
+                    break;
+                case ">":
+                    resultado = num1 > num2;
+                    break;
+                case "<=":
+                    resultado = num1 <= num2;
+                    break;
+                case ">=":
+                    resultado = num1 >= num2;
+                    break;
+                default:
+                    throw new Exception($"Operador no válido: {operador}");
+            }
+
+            tipo = "bool";
+            cadena = resultado.ToString().ToLower();
+        }
+        else
+        {
+            throw new Exception($"No se pueden comparar tipos diferentes: {tipo1} y {tipo2}");
+        }
+
         return null;
     }
 
@@ -726,22 +975,108 @@ public override Object VisitSumres(GolightParser.SumresContext context)
 
     public override Object VisitIf1(GolightParser.If1Context context)
     {
+        string etiquetaEnd = $"L{etiquetaCount++}";
+
+        // Evaluar la condición
+        Visit(context.expresion(0));
+        if (tipo != "bool")
+        {
+            throw new Exception("La condición debe ser de tipo booleano");
+        }
+
+        codigo.comentario("If statement");
+        codigo.pop(Registers.x0);
+        codigo.cmp(Registers.x0, 1);
+        codigo.beq(etiquetaEnd); // Si es verdadero, salta al final
+
+        // Bloque if
+        foreach (var stmt in context.contenido())
+        {
+            Visit(stmt);
+        }
+
+        codigo.etiqueta(etiquetaEnd); // Definir etiqueta de fin
+
         return null;
     }
-
-
 
     public override Object VisitElseif(GolightParser.ElseifContext context)
     {
+        List<string> etiquetas = new List<string>();
+        string etiquetaEnd = $"L{etiquetaCount++}";
+
+        codigo.comentario("If-else if chain");
+        
+        // Primera condición (if)
+        Visit(context.expresion(0));
+        if (tipo != "bool")
+        {
+            throw new Exception("La condición debe ser de tipo booleano");
+        }
+
+        codigo.pop(Registers.x0);
+        codigo.cmp(Registers.x0, 1);
+        string primeraEtiqueta = $"L{etiquetaCount++}";
+        etiquetas.Add(primeraEtiqueta);
+        codigo.beq(etiquetaEnd); // Si es verdadero, salta al bloque if
+        codigo.b(primeraEtiqueta); // Si es falso, va al siguiente else-if
+
+        // Bloque if
+        foreach (var stmt in context.contenido())
+        {
+            Visit(stmt);
+        }
+        codigo.b(etiquetaEnd);
+
+        // Procesar else-if
+        for (int i = 0; i < etiquetas.Count; i++)
+        {
+            codigo.etiqueta(etiquetas[i]); // Definir etiqueta del else-if
+
+            if (i < context.expresion().Length - 1)
+            {
+                Visit(context.expresion(i + 1));
+                if (tipo != "bool")
+                {
+                    throw new Exception("La condición debe ser de tipo booleano");
+                }
+
+                codigo.pop(Registers.x0);
+                codigo.cmp(Registers.x0, 1);
+
+                if (i < context.expresion().Length - 2)
+                {
+                    string nuevaEtiqueta = $"L{etiquetaCount++}";
+                    etiquetas.Add(nuevaEtiqueta);
+                    codigo.beq(etiquetaEnd);
+                    codigo.b(nuevaEtiqueta);
+                }
+                else
+                {
+                    codigo.beq(etiquetaEnd);
+                }
+
+                foreach (var stmt in context.contenido())
+                {
+                    Visit(stmt);
+                }
+                codigo.b(etiquetaEnd);
+            }
+        }
+
+        codigo.etiqueta(etiquetaEnd); // Definir etiqueta de fin
         return null;
     }
 
-
-    public override Object VisitElse(GolightParser.ElseContext context)
+public override Object VisitElse(GolightParser.ElseContext context)
+{
+    // El else se maneja dentro de if y else-if
+    foreach (var stmt in context.contenido())
     {
-        return null;
+        Visit(stmt);
     }
-
+    return null;
+}
     public override Object VisitFor1(GolightParser.For1Context context)
     {
         return null;
