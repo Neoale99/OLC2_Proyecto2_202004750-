@@ -201,44 +201,36 @@ public class Symbol
         Value = value ?? GetDefaultValue(type); // Valor por defecto según el tipo
     }
 
-    private string GetDefaultValue(string type)
+     public static string GetDefaultValue(string type)
     {
-        switch (type)
+        switch (type.ToLower())
         {
-            case "int":
-                return "0";
-            case "float":
-                return "0.0";
-            case "string":
-                return "";
-            case "bool":
-                return "false";
-            case "rune":
-                return "\0";
-            default:
-                return "";
+            case "int": return "0";
+            case "float": return "0.0";
+            case "string": return "\"\"";
+            case "bool": return "false";
+            case "rune": return "'\\0'";
+            default: return "";
         }
     }
 
-    // Método auxiliar para validar tipos
-    public bool IsValidValue(string newValue)
+    public static bool IsValidValue(string type, string value)
     {
         try
         {
-            switch (Type)
+            switch (type.ToLower())
             {
                 case "int":
-                    int.Parse(newValue);
-                    return true;
+                    return int.TryParse(value, out _);
                 case "float":
-                    double.Parse(newValue);
-                    return true;
+                    return double.TryParse(value, out _);
                 case "bool":
-                    return newValue == "true" || newValue == "false";
+                    return value.ToLower() == "true" || value.ToLower() == "false";
                 case "string":
-                    return true; 
+                    // Una cadena siempre es válida
+                    return true;
                 case "rune":
-                    return newValue.Length == 1;
+                    return value.Length == 3 && value[0] == '\'' && value[2] == '\'';
                 default:
                     return false;
             }
@@ -246,6 +238,30 @@ public class Symbol
         catch
         {
             return false;
+        }
+    }
+
+    public static string FormatValue(string type, string value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return GetDefaultValue(type);
+
+        switch (type.ToLower())
+        {
+            case "string":
+                if (!value.StartsWith("\""))
+                    value = "\"" + value;
+                if (!value.EndsWith("\""))
+                    value = value + "\"";
+                return value;
+            case "rune":
+                if (!value.StartsWith("'"))
+                    value = "'" + value;
+                if (!value.EndsWith("'"))
+                    value = value + "'";
+                return value;
+            default:
+                return value;
         }
     }
 }
@@ -277,8 +293,8 @@ public class SymbolTable
         {
             throw new Exception($"Error: La variable '{name}' no está definida.");
         }
-
-        if (!symbol.IsValidValue(newValue))
+        var type = symbol.Type.ToLower();
+        if (!Symbol.IsValidValue(type, newValue))
         {
             throw new Exception($"Error: Valor inválido '{newValue}' para la variable '{name}' de tipo {symbol.Type}");
         }

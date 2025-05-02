@@ -89,7 +89,7 @@ public override Object VisitPrintln(GolightParser.PrintlnContext context)
                     break;
                 case "string":
                     codigo.comentario($"Imprimiendo cadena: {cadena}");
-                    Console.WriteLine("Cadena: " + cadena);
+                    Console.WriteLine(cadena);
                     if (cadena.StartsWith("\"") && cadena.EndsWith("\""))
                         {
                             cadena = cadena.Substring(1, cadena.Length - 2);
@@ -221,9 +221,9 @@ public override Object VisitDeclaexplicitavalor(GolightParser.Declaexplicitavalo
         if (tipoVariable == "float64") {
             tipoVariable = "float";
         }
-        _isdeclaracion = true;
+        _comesfromasign = true;
         Visit(context.expresion());
-        _isdeclaracion = false;
+        _comesfromasign = false;
 
 
         string valor = tipo switch
@@ -254,15 +254,15 @@ public override Object VisitDeclaexplicitanovalor(GolightParser.Declaexplicitano
     {
         string id = context.ID().GetText();
         
-        _isdeclaracion = true;
+        _comesfromasign = true;
         Visit(context.expresion());
-        _isdeclaracion = false;
+        _comesfromasign = false;
 
         // Obtener el valor según el tipo inferido
         string valor = tipo switch
         {
-            "int" => context.expresion().GetText(),
-            "float" => context.expresion().GetText(),
+            "int" => cadena,
+            "float" => cadena,
             "string" => cadena,
             "bool" => cadena,
             "rune" => cadena,
@@ -295,6 +295,7 @@ public override Object VisitDeclaexplicitanovalor(GolightParser.Declaexplicitano
         //Console.WriteLine("ID: " + id);
         var symbol = symbolTable.GetSymbol(id);
         string tipoVariable = symbol.Type;
+        Console.WriteLine("Variable: " + id + " con valor " + symbol.Value);
         Visit(context.expresion(1));
 
 
@@ -304,7 +305,7 @@ public override Object VisitDeclaexplicitanovalor(GolightParser.Declaexplicitano
             cadena = $"\"{cadena}\"";
             Console.WriteLine("Cadena con comillas: " + cadena);
         }
- 
+        Console.WriteLine("Actualizando: "+id + "con valor" + cadena);
         symbolTable.UpdateSymbol(id, cadena);
         _comesfromasign = false;
         return null;
@@ -317,67 +318,54 @@ public override Object VisitDeclaexplicitanovalor(GolightParser.Declaexplicitano
     }
 
 
-public override Object VisitSumres(GolightParser.SumresContext context) 
-    {
-        var operacion = context.op.Text;
-        if (_comesfromasign == true) {
+    public override Object VisitSumres(GolightParser.SumresContext context) 
+        {
+    var operacion = context.op.Text;
+        
+        if (_comesfromasign) {
+            // Primera expresión
             Visit(context.expresion(0));
-            string tmp1 = tipo;
-            string val1;
-            
-            // Si es un ID, obtener el valor de la tabla de símbolos
+            string tipo1 = tipo;
+            string val1 = cadena;
+
+            // Segunda expresión
+            Visit(context.expresion(1));
+            string tipo2 = tipo;
+            string val2 = cadena;
+            cadena = "";
+            // Si alguna expresión es ID, obtener su valor
             if (context.expresion(0) is GolightParser.IdContext id1)
             {
-                val1 =  cadena;
-                Console.WriteLine("val1: " + val1);
+                val1 = symbolTable.GetSymbol(id1.GetText()).Value;
+                val1 = val1.ToString();
             }
-            else
-            {
-                val1 = context.expresion(0).GetText();
-                Console.WriteLine("val1: " + val1);
-            }
-
-            Visit(context.expresion(1));
-            string tmp2 = tipo;
-            string val2;
-            
             if (context.expresion(1) is GolightParser.IdContext id2)
             {
-                val2 = cadena;
-                Console.WriteLine("val2: " + val2);
+                val2 = symbolTable.GetSymbol(id2.GetText()).Value;
+                val2 = val2.ToString();
             }
-            else
-            {
-                val2 = context.expresion(1).GetText();
-                Console.WriteLine("val2: " + val2);
-            }
-            if (tmp1 == "string" && tmp2 == "string")
+
+            // Manejo de strings
+            if (tipo1 == "string" && tipo2 == "string")
             {
                 if (operacion == "+")
                 {   
-                    val1 = val1.Substring(1, val1.Length - 2); // Eliminar comillas
-                    val2 = val2.Substring(1, val2.Length - 2); // Eliminar comillas 
-                    //Console.WriteLine("Cadena 1: " + val1 + " Cadena 2: " + val2);
-                    cadena = val1 + val2;
+                    val1 = val1.Substring(1, val1.Length - 2); 
+                    val2 = val2.Substring(1, val2.Length - 2); 
+                    cadena = $"\"{val1}{val2}\"";
                     tipo = "string";
                     return null;
                 }
-                else
-                {
-                    throw new Exception("Operación no válida para strings");
-                }
+                throw new Exception("Operación no válida para strings");
             }   
-            if (tmp1 == "float" || tmp2 == "float") 
+
+            // Operaciones numéricas
+            if (tipo1 == "float" || tipo2 == "float") 
             {
                 double num1 = double.Parse(val1);
                 double num2 = double.Parse(val2);
-                double resultado;
-
-                if (operacion == "+")
-                    resultado = num1 + num2;
-                else
-                    resultado = num1 - num2;
-
+                Console.WriteLine(num1 + num2);
+                double resultado = operacion == "+" ? num1 + num2 : num1 - num2;
                 tipo = "float";
                 cadena = resultado.ToString();
             }
@@ -385,18 +373,13 @@ public override Object VisitSumres(GolightParser.SumresContext context)
             {
                 int num1 = int.Parse(val1);
                 int num2 = int.Parse(val2);
-                int resultado;
-
-                if (operacion == "+")
-                    resultado = num1 + num2;
-                else
-                    resultado = num1 - num2;
-
+                Console.WriteLine(num1 + num2);
+                int resultado = operacion == "+" ? num1 + num2 : num1 - num2;
                 tipo = "int";
                 cadena = resultado.ToString();
             }
-            _comesfromasign = false;
-        } else {
+            return null;
+        }else {
 
         Visit(context.expresion(0));
         string tmp1 = tipo;
@@ -694,208 +677,105 @@ public override Object VisitAnd(GolightParser.AndContext context)
         return null;
     }
 
-    public override Object VisitIgualdad(GolightParser.IgualdadContext context)
-    {
-        var operador = context.op.Text;
-        
-        // Evaluamos la primera expresión
-        Visit(context.expresion(0));
-        string tipo1 = tipo;
-        string val1;
-        
-        // Obtener valor de la primera expresión
-        if (context.expresion(0) is GolightParser.IdContext id1)
-        {
-            val1 = symbolTable.GetSymbol(id1.GetText()).Value;
-        }
-        else
-        {
-            val1 = context.expresion(0).GetText();
-        }
-
-        // Evaluamos la segunda expresión
-        Visit(context.expresion(1));
-        string tipo2 = tipo;
-        string val2;
-        
-        if (context.expresion(1) is GolightParser.IdContext id2)
-        {
-            val2 = symbolTable.GetSymbol(id2.GetText()).Value;
-        }
-        else
-        {
-            val2 = context.expresion(1).GetText();
-        }
-
-        // Comparación según tipos
-        if (tipo1 == "float" || tipo2 == "float")
-        {
-            double num1 = double.Parse(val1);
-            double num2 = double.Parse(val2);
-            bool resultado;
-
-            switch (operador)
-            {
-                case "==":
-                    resultado = Math.Abs(num1 - num2) < 0.000001; // Comparación de flotantes
-                    break;
-                case "!=":
-                    resultado = Math.Abs(num1 - num2) >= 0.000001;
-                    break;
-                default:
-                    throw new Exception($"Operador no válido: {operador}");
-            }
-
-            tipo = "bool";
-            cadena = resultado.ToString().ToLower();
-        }
-        else if (tipo1 == "int" && tipo2 == "int")
-        {
-            int num1 = int.Parse(val1);
-            int num2 = int.Parse(val2);
-            bool resultado;
-
-            switch (operador)
-            {
-                case "==":
-                    resultado = num1 == num2;
-                    break;
-                case "!=":
-                    resultado = num1 != num2;
-                    break;
-                default:
-                    throw new Exception($"Operador no válido: {operador}");
-            }
-
-            tipo = "bool";
-            cadena = resultado.ToString().ToLower();
-        }
-        else if (tipo1 == "string" && tipo2 == "string")
-        {
-            // Remover comillas para comparación
-            val1 = val1.Substring(1, val1.Length - 2);
-            val2 = val2.Substring(1, val2.Length - 2);
-            bool resultado;
-
-            switch (operador)
-            {
-                case "==":
-                    resultado = val1 == val2;
-                    break;
-                case "!=":
-                    resultado = val1 != val2;
-                    break;
-                default:
-                    throw new Exception($"Operador no válido: {operador}");
-            }
-
-            tipo = "bool";
-            cadena = resultado.ToString().ToLower();
-        }
-        else
-        {
-            throw new Exception($"No se pueden comparar tipos diferentes: {tipo1} y {tipo2}");
-        }
-
-        return null;
-    }
     public override Object VisitRelacionales(GolightParser.RelacionalesContext context)
     {
-        var operador = context.op.Text;
-        
-        // Evaluamos la primera expresión
+        // Evaluar primera expresión
         Visit(context.expresion(0));
         string tipo1 = tipo;
-        string val1;
-        
-        // Obtener valor de la primera expresión
-        if (context.expresion(0) is GolightParser.IdContext id1)
-        {
-            val1 = symbolTable.GetSymbol(id1.GetText()).Value;
-        }
-        else
-        {
-            val1 = context.expresion(0).GetText();
-        }
+        string val1 = cadena;
 
-        // Evaluamos la segunda expresión
+        // Evaluar segunda expresión
         Visit(context.expresion(1));
         string tipo2 = tipo;
-        string val2;
-        
-        if (context.expresion(1) is GolightParser.IdContext id2)
-        {
-            val2 = symbolTable.GetSymbol(id2.GetText()).Value;
-        }
-        else
-        {
-            val2 = context.expresion(1).GetText();
-        }
+        string val2 = cadena;
 
-        // Si alguno es float, convertir ambos a float
+        bool resultado = false;
+        
         if (tipo1 == "float" || tipo2 == "float")
         {
             double num1 = double.Parse(val1);
             double num2 = double.Parse(val2);
-            bool resultado = false;
 
-            switch (operador)
+            switch (context.op.Text)
             {
-                case "<":
-                    resultado = num1 < num2;
-                    break;
-                case ">":
-                    resultado = num1 > num2;
-                    break;
-                case "<=":
-                    resultado = num1 <= num2;
-                    break;
-                case ">=":
-                    resultado = num1 >= num2;
-                    break;
-                default:
-                    throw new Exception($"Operador no válido: {operador}");
+                case ">": resultado = num1 > num2; break;
+                case "<": resultado = num1 < num2; break;
+                case ">=": resultado = num1 >= num2; break;
+                case "<=": resultado = num1 <= num2; break;
             }
-
-            tipo = "bool";
-            cadena = resultado.ToString().ToLower();
         }
-        // Si son enteros
         else if (tipo1 == "int" && tipo2 == "int")
         {
             int num1 = int.Parse(val1);
             int num2 = int.Parse(val2);
-            bool resultado = false;
 
-            switch (operador)
+            switch (context.op.Text)
             {
-                case "<":
-                    resultado = num1 < num2;
-                    break;
-                case ">":
-                    resultado = num1 > num2;
-                    break;
-                case "<=":
-                    resultado = num1 <= num2;
-                    break;
-                case ">=":
-                    resultado = num1 >= num2;
-                    break;
-                default:
-                    throw new Exception($"Operador no válido: {operador}");
+                case ">": resultado = num1 > num2; break;
+                case "<": resultado = num1 < num2; break;
+                case ">=": resultado = num1 >= num2; break;
+                case "<=": resultado = num1 <= num2; break;
             }
+        }
 
-            tipo = "bool";
-            cadena = resultado.ToString().ToLower();
-        }
-        else
-        {
-            throw new Exception($"No se pueden comparar tipos diferentes: {tipo1} y {tipo2}");
-        }
+        tipo = "bool";
+        // Importante: guardar el resultado como 1 o 0 para ARM64
+        cadena = resultado ? "true" : "false";
+        Console.WriteLine($"Resultado de comparación: {cadena}");
 
         return null;
     }
 
+    public override Object VisitIgualdad(GolightParser.IgualdadContext context)
+    {
+        // Evaluar primera expresión
+        Visit(context.expresion(0));
+        string tipo1 = tipo;
+        string val1 = cadena;
+
+        // Evaluar segunda expresión
+        Visit(context.expresion(1));
+        string tipo2 = tipo;
+        string val2 = cadena;
+
+        bool resultado = false;
+
+        switch (tipo1)
+        {
+            case "int" when tipo2 == "int":
+                int num1 = int.Parse(val1);
+                int num2 = int.Parse(val2);
+                resultado = context.op.Text == "==" ? num1 == num2 : num1 != num2;
+                break;
+                
+            case "float" when tipo2 == "float":
+                double float1 = double.Parse(val1);
+                double float2 = double.Parse(val2);
+                resultado = context.op.Text == "==" ? 
+                    Math.Abs(float1 - float2) < 0.000001 : 
+                    Math.Abs(float1 - float2) >= 0.000001;
+                break;
+                
+            case "string" when tipo2 == "string":
+                // Remover comillas
+                val1 = val1.Trim('"');
+                val2 = val2.Trim('"');
+                resultado = context.op.Text == "==" ? val1 == val2 : val1 != val2;
+                break;
+                
+            case "bool" when tipo2 == "bool":
+                bool bool1 = bool.Parse(val1);
+                bool bool2 = bool.Parse(val2);
+                resultado = context.op.Text == "==" ? bool1 == bool2 : bool1 != bool2;
+                break;
+        }
+
+        tipo = "bool";
+        
+        cadena = resultado ? "true" : "false";
+        Console.WriteLine($"Resultado de comparación: {cadena}");
+        return null;
+    }
     public override Object VisitUnario(GolightParser.UnarioContext context)
     {
             var operador = context.op.Text;
@@ -975,9 +855,10 @@ public override Object VisitAnd(GolightParser.AndContext context)
 
     public override Object VisitIf1(GolightParser.If1Context context)
     {
-        string etiquetaEnd = $"L{etiquetaCount++}";
+        string etiquetaFalse = $"L{etiquetaCount++}";
+        string etiquetaFin = $"L{etiquetaCount++}";
 
-        // Evaluar la condición
+        // Evaluar toda la condición primero
         Visit(context.expresion(0));
         if (tipo != "bool")
         {
@@ -986,28 +867,38 @@ public override Object VisitAnd(GolightParser.AndContext context)
 
         codigo.comentario("If statement");
         codigo.pop(Registers.x0);
-        codigo.cmp(Registers.x0, 1);
-        codigo.beq(etiquetaEnd); // Si es verdadero, salta al final
+        codigo.cmp(Registers.x0, 0);  // Comparar con 0 (false)
+        codigo.beq(etiquetaFalse);    // Si es false, saltar al else
 
-        // Bloque if
+        // Bloque if (true)
         foreach (var stmt in context.contenido())
         {
             Visit(stmt);
         }
+        codigo.b(etiquetaFin);        // Saltar al final después de ejecutar el if
 
-        codigo.etiqueta(etiquetaEnd); // Definir etiqueta de fin
+        // Bloque else (false)
+        codigo.etiqueta(etiquetaFalse);
+        if (context.contenido().Length > 1)
+        {
+            foreach (var stmt in context.contenido().Skip(1))
+            {
+                Visit(stmt);
+            }
+        }
 
+        codigo.etiqueta(etiquetaFin);
         return null;
     }
 
     public override Object VisitElseif(GolightParser.ElseifContext context)
     {
-        List<string> etiquetas = new List<string>();
-        string etiquetaEnd = $"L{etiquetaCount++}";
+        string etiquetaFalse = $"L{etiquetaCount++}";
+        string etiquetaFin = $"L{etiquetaCount++}";
 
-        codigo.comentario("If-else if chain");
+        codigo.comentario("If-else chain");
         
-        // Primera condición (if)
+        // Evaluar condición del if
         Visit(context.expresion(0));
         if (tipo != "bool")
         {
@@ -1015,68 +906,43 @@ public override Object VisitAnd(GolightParser.AndContext context)
         }
 
         codigo.pop(Registers.x0);
-        codigo.cmp(Registers.x0, 1);
-        string primeraEtiqueta = $"L{etiquetaCount++}";
-        etiquetas.Add(primeraEtiqueta);
-        codigo.beq(etiquetaEnd); // Si es verdadero, salta al bloque if
-        codigo.b(primeraEtiqueta); // Si es falso, va al siguiente else-if
+        codigo.cmp(Registers.x0, 0);  // Comparar con 0 (false)
+        codigo.beq(etiquetaFalse);    // Si es false, ir al else
 
-        // Bloque if
+        // Bloque if (true)
         foreach (var stmt in context.contenido())
         {
             Visit(stmt);
         }
-        codigo.b(etiquetaEnd);
+        codigo.b(etiquetaFin);        // Saltar al final después de ejecutar el if
 
-        // Procesar else-if
-        for (int i = 0; i < etiquetas.Count; i++)
+        // Bloque else (false)
+        codigo.etiqueta(etiquetaFalse);
+        if (context.expresion().Length > 1)
         {
-            codigo.etiqueta(etiquetas[i]); // Definir etiqueta del else-if
-
-            if (i < context.expresion().Length - 1)
+            Visit(context.expresion(1));  // Evaluar condición del else-if
+            codigo.pop(Registers.x0);
+            codigo.cmp(Registers.x0, 1);
+            codigo.beq(etiquetaFin);      // Si es true, ejecutar el bloque
+            
+            foreach (var stmt in context.contenido().Skip(1))
             {
-                Visit(context.expresion(i + 1));
-                if (tipo != "bool")
-                {
-                    throw new Exception("La condición debe ser de tipo booleano");
-                }
-
-                codigo.pop(Registers.x0);
-                codigo.cmp(Registers.x0, 1);
-
-                if (i < context.expresion().Length - 2)
-                {
-                    string nuevaEtiqueta = $"L{etiquetaCount++}";
-                    etiquetas.Add(nuevaEtiqueta);
-                    codigo.beq(etiquetaEnd);
-                    codigo.b(nuevaEtiqueta);
-                }
-                else
-                {
-                    codigo.beq(etiquetaEnd);
-                }
-
-                foreach (var stmt in context.contenido())
-                {
-                    Visit(stmt);
-                }
-                codigo.b(etiquetaEnd);
+                Visit(stmt);
             }
         }
 
-        codigo.etiqueta(etiquetaEnd); // Definir etiqueta de fin
+        codigo.etiqueta(etiquetaFin);
         return null;
     }
-
-public override Object VisitElse(GolightParser.ElseContext context)
-{
-    // El else se maneja dentro de if y else-if
-    foreach (var stmt in context.contenido())
+    public override Object VisitElse(GolightParser.ElseContext context)
     {
-        Visit(stmt);
+        // Ejecutar el bloque else
+        foreach (var stmt in context.contenido())
+        {
+            Visit(stmt);
+        }
+        return null;
     }
-    return null;
-}
     public override Object VisitFor1(GolightParser.For1Context context)
     {
         return null;

@@ -194,14 +194,14 @@ public class GeneradorARM{
         instruccionesARM.Add($"CMP {rs1}, {rs2}");
     }
 
+    public void etiqueta(string nombre)
+    {
+        instruccionesARM.Add($"{nombre}:");
+    }
+
     public void b(string etiqueta)
     {
         instruccionesARM.Add($"B {etiqueta}");
-    }
-
-    public void bne(string etiqueta)
-    {
-        instruccionesARM.Add($"BNE {etiqueta}");
     }
 
     public void beq(string etiqueta)
@@ -209,8 +209,34 @@ public class GeneradorARM{
         instruccionesARM.Add($"BEQ {etiqueta}");
     }
 
-    public void etiqueta(string nombre)
+    public void bne(string etiqueta)
     {
-        instruccionesARM.Add($"{nombre}:");
+        instruccionesARM.Add($"BNE {etiqueta}");
     }
+    public void fcmp()
+    {
+        instruccionesARM.Add("FCMP d0, d1");
+    }
+
+    public void bgt(string etiqueta)
+    {
+        instruccionesARM.Add($"BGT {etiqueta}");
+    }
+
+    public void blt(string etiqueta)
+    {
+        instruccionesARM.Add($"BLT {etiqueta}");
+    }
+
+    public void bge(string etiqueta)
+    {
+        instruccionesARM.Add($"BGE {etiqueta}");
+    }
+
+    public void ble(string etiqueta)
+    {
+        instruccionesARM.Add($"BLE {etiqueta}");
+    }
+
+
 }
