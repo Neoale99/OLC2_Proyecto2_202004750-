@@ -109,7 +109,7 @@ public class StandardLibrary
         
     print_result:
         // Add newline
-        mov w24, #10               // Newline character
+        mov w24, #32               // Space character
         strb w24, [x22, x23]       // Add to end of buffer
         add x23, x23, #1           // Increment counter
         
@@ -153,7 +153,7 @@ public class StandardLibrary
 
     print_loop:
         ldrb w20, [x19]
-        cbz w20, print_newline
+        cbz w20, print_space
 
         mov x0, #1
         mov x1, x19
@@ -164,9 +164,9 @@ public class StandardLibrary
         add x19, x19, #1
         b print_loop
 
-    print_newline:
+    print_space:
         mov x0, #1
-        adr x1, newline_char
+        adr x1, space_char
         mov x2, #1
         mov x8, #64
         svc #0
@@ -304,7 +304,7 @@ public class StandardLibrary
         
         // Imprimir nueva línea
         mov x0, #1              // fd stdout
-        adr x1, float_nl        // dirección del newline
+        adr x1, space_char        // dirección del newline
         mov x2, #1              // longitud 1
         mov x8, #64             // syscall write
         svc #0
@@ -396,6 +396,19 @@ public class StandardLibrary
     float_nl:
         .ascii ""\n""
         .align 4                // Asegurar alineación
+    "} ,
+ { "print_newline2", @"
+    print_newline2:
+        stp x29, x30, [sp, #-16]!
+        mov x0, #1              // fd stdout
+        adr x1, newline_char    // dirección del newline
+        mov x2, #1              // longitud 1
+        mov x8, #64             // syscall write
+        svc #0
+        ldp x29, x30, [sp], #16
+        ret
+
+
     "}
     };
 }

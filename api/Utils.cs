@@ -182,98 +182,131 @@ public static string GenerarTablaErrores(List<(string Tipo, string Linea, string
         }
     }
 
-    public class Symbol
-    {
-        public string Name { get; } 
-        public string Type { get; } 
-        public string Scope { get; } 
-        public int Line { get; } 
-        public int Column { get; } 
+public class Symbol 
+{
+    public string Name { get; }
+    public string Type { get; }
+    public string Scope { get; }
+    public int Line { get; }
+    public int Column { get; }
+    public string Value { get; set; } // Permitimos set para actualizar valores
 
-        public Symbol(string name, string type, string scope, int line, int column)
+    public Symbol(string name, string type, string scope, int line, int column, string value = null)
+    {
+        Name = name;
+        Type = type;
+        Scope = scope;
+        Line = line;
+        Column = column;
+        Value = value ?? GetDefaultValue(type); // Valor por defecto según el tipo
+    }
+
+    private string GetDefaultValue(string type)
+    {
+        switch (type)
         {
-            Name = name;
-            Type = type;
-            Scope = scope;
-            Line = line;
-            Column = column;
+            case "int":
+                return "0";
+            case "float":
+                return "0.0";
+            case "string":
+                return "";
+            case "bool":
+                return "false";
+            case "rune":
+                return "\0";
+            default:
+                return "";
         }
     }
 
-    public class SymbolTable
+    // Método auxiliar para validar tipos
+    public bool IsValidValue(string newValue)
     {
-        private Dictionary<string, Symbol> symbols = new Dictionary<string, Symbol>();
-
-        public void AddSymbol(Symbol symbol)
+        try
         {
-            if (symbols.ContainsKey(symbol.Name))
+            switch (Type)
             {
-                throw new Exception($"El símbolo '{symbol.Name}' ya está definido.");
-            }
-            symbols[symbol.Name] = symbol;
-        }
-
-        public Symbol GetSymbol(string name)
-        {
-            if (symbols.TryGetValue(name, out var symbol))
-            {
-                return symbol;
-            }
-            throw new Exception($"El símbolo '{name}' no está definido.");
-        }
-
-        public bool ContainsSymbol(string name)
-        {
-            return symbols.ContainsKey(name);
-        }
-
-        public List<Symbol> GetAllSymbols()
-        {
-            return new List<Symbol>(symbols.Values);
-        }
-    }
-
-    public class ScopeManager
-    {
-        private Stack<SymbolTable> scopeStack = new Stack<SymbolTable>();
-
-        public ScopeManager()
-        {
-
-            EnterScope();
-        }
-
-
-        public void EnterScope()
-        {
-            scopeStack.Push(new SymbolTable());
-        }
-
-        public void ExitScope()
-        {
-            if (scopeStack.Count > 1) 
-            {
-                scopeStack.Pop();
+                case "int":
+                    int.Parse(newValue);
+                    return true;
+                case "float":
+                    double.Parse(newValue);
+                    return true;
+                case "bool":
+                    return newValue == "true" || newValue == "false";
+                case "string":
+                    return true; 
+                case "rune":
+                    return newValue.Length == 1;
+                default:
+                    return false;
             }
         }
-
-        public SymbolTable CurrentScope()
+        catch
         {
-            return scopeStack.Peek();
-        }
-
-        public Symbol GetSymbol(string name)
-        {
-            foreach (var scope in scopeStack)
-            {
-                if (scope.ContainsSymbol(name))
-                {
-                    return scope.GetSymbol(name);
-                }
-            }
-            throw new Exception($"El símbolo '{name}' no está definido.");
+            return false;
         }
     }
 }
+public class SymbolTable
+{
+    private Dictionary<string, Symbol> symbols = new Dictionary<string, Symbol>();
+
+    public void AddSymbol(Symbol symbol)
+    {
+        if (symbols.ContainsKey(symbol.Name))
+        {
+            throw new Exception($"Error: La variable '{symbol.Name}' ya está definida en el ámbito actual.");
+        }
+        symbols[symbol.Name] = symbol;
+    }
+
+    public Symbol GetSymbol(string name)
+    {
+        if (symbols.TryGetValue(name, out var symbol))
+        {
+            return symbol;
+        }
+        throw new Exception($"Error: La variable '{name}' no está definida.");
+    }
+
+    public void UpdateSymbol(string name, string newValue)
+    {
+        if (!symbols.TryGetValue(name, out var symbol))
+        {
+            throw new Exception($"Error: La variable '{name}' no está definida.");
+        }
+
+        if (!symbol.IsValidValue(newValue))
+        {
+            throw new Exception($"Error: Valor inválido '{newValue}' para la variable '{name}' de tipo {symbol.Type}");
+        }
+
+        symbol.Value = newValue;
+    }
+
+    public bool ContainsSymbol(string name)
+    {
+        return symbols.ContainsKey(name);
+    }
+
+    public List<Symbol> GetAllSymbols()
+    {
+        return new List<Symbol>(symbols.Values);
+    }
+
+    // Método auxiliar para obtener el tipo de una variable
+    public string GetSymbolType(string name)
+    {
+        if (symbols.TryGetValue(name, out var symbol))
+        {
+            return symbol.Type;
+        }
+        throw new Exception($"Error: La variable '{name}' no está definida.");
+    }
+}
+}
+
 
 

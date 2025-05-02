@@ -11,16 +11,16 @@ using System.Xml.Serialization;
 public class Visitor : GolightBaseVisitor<Object>
 {
     private Utils.SymbolTable symbolTable = new Utils.SymbolTable();
-    //            symbolTable.AddSymbol(new Utils.Symbol(id, type, "local", line, column));
+
     public GeneradorARM codigo = new GeneradorARM();
     private StringBuilder _dataSection = new StringBuilder();
     private StringBuilder _textSection = new StringBuilder();
     private StringBuilder _entrySection = new StringBuilder();
     private string tipo = "";
     private string cadena = "";
-    
+    private bool _isdeclaracion = false;
     private bool _condicionCumplida = false; 
-    
+    private bool _comesfromasign = false;
     public Visitor()
     {
 
@@ -88,6 +88,11 @@ public override Object VisitPrintln(GolightParser.PrintlnContext context)
                     break;
                 case "string":
                     codigo.comentario($"Imprimiendo cadena: {cadena}");
+                    Console.WriteLine("Cadena: " + cadena);
+                    if (cadena.StartsWith("\"") && cadena.EndsWith("\""))
+                        {
+                            cadena = cadena.Substring(1, cadena.Length - 2);
+                        }
                     codigo.Printstr(cadena); // Imprimimos la cadena
                     cadena = ""; // Reiniciamos la cadena
                     tipo = ""; // Reiniciamos el tipo
@@ -97,7 +102,10 @@ public override Object VisitPrintln(GolightParser.PrintlnContext context)
                     codigo.PrintFloat();
                     break;
                 case "bool":
-                    // Implementar la lógica para imprimir bool
+                    codigo.comentario($"Imprimiendo bool: {cadena}");
+                    codigo.Printstr(cadena); 
+                    cadena = ""; 
+                    tipo = ""; 
                     break;
                 case "rune":
                     codigo.comentario($"Imprimiendo rune: {cadena}");
@@ -109,14 +117,50 @@ public override Object VisitPrintln(GolightParser.PrintlnContext context)
                     throw new Exception($"Tipo no soportado para impresión: {tipo}");
             }
         }
+        codigo.comentario("Salto de linea");
+        codigo.PrintNewLine();
         return null;
     }
 
     public override Object VisitId(GolightParser.IdContext context)
     {
+        string id = context.GetText();
+        var symbol = symbolTable.GetSymbol(id);
+        var tmp = symbol.Value;
+        tipo = symbol.Type;
+        //Console.WriteLine(tipo);
+
+        switch (tipo)
+        {
+            case "int":
+                codigo.comentario($"Entero: {tmp}");
+                codigo.mov(Registers.x0, int.Parse(tmp));
+                codigo.push(Registers.x0);
+                cadena = symbol.Value;
+                break;
+            case "float":
+                codigo.comentario($"ID flotante: {id}");
+                codigo.comentario($"Flotante: {tmp}");
+                codigo.LoadFloatBits(double.Parse(tmp));
+                cadena = symbol.Value;
+                break;
+            case "string":
+                cadena = symbol.Value;
+                cadena = symbol.Value.Substring(1, symbol.Value.Length - 2); // Eliminar comillas
+                break;
+            case "bool":
+                cadena = symbol.Value;
+                break;
+            case "rune":
+                cadena = symbol.Value;
+                break;
+            default:
+                throw new Exception($"Tipo no soportado: {tipo}");
+        }
+        cadena = symbol.Value;
+        
         return null;
     }
-
 
     public override Object VisitInt(GolightParser.IntContext context)
     {
@@ -124,6 +168,7 @@ public override Object VisitPrintln(GolightParser.PrintlnContext context)
         codigo.comentario($"Entero: {entero}");
         codigo.mov(Registers.x0, int.Parse(entero));
         codigo.push(Registers.x0);
+        cadena = entero;
         tipo = "int";
         return null;
     }
@@ -135,18 +180,22 @@ public override Object VisitPrintln(GolightParser.PrintlnContext context)
         codigo.comentario($"Flotante: {flotante}");
         codigo.LoadFloatBits(valflotante);
         tipo = "float";
+        cadena = flotante;
         return null;
     }
     public override Object VisitString(GolightParser.StringContext context)
     {
         cadena = context.GetText();
         cadena = cadena.Substring(1, cadena.Length - 2); 
+
+
         tipo = "string";
 
         return null;
     }
     public override Object VisitBool(GolightParser.BoolContext context)
     {
+        cadena = context.GetText();
         tipo = "bool";
         return null;
     }
@@ -165,21 +214,63 @@ public override Object VisitPrintln(GolightParser.PrintlnContext context)
     }
 
 public override Object VisitDeclaexplicitavalor(GolightParser.DeclaexplicitavalorContext context)
-{
-        return null;
-}
+    {
+        string id = context.ID().GetText();
+        string tipoVariable = context.TIPO().GetText();
+        if (tipoVariable == "float64") {
+            tipoVariable = "float";
+        }
+        _isdeclaracion = true;
+        Visit(context.expresion());
+        _isdeclaracion = false;
 
+
+        string valor = tipo switch
+        {
+            "int" => context.expresion().GetText(),
+            "float" => context.expresion().GetText(),
+            "string" => cadena,
+            "bool" => cadena,
+            "rune" => cadena,
+            _ => throw new Exception($"Tipo no soportado: {tipoVariable}")
+        };
+
+        symbolTable.AddSymbol(new Utils.Symbol(id, tipoVariable, "local", context.Start.Line, context.Start.Column, valor));
+        tipo = "";
+        return null;
+    }
 public override Object VisitDeclaexplicitanovalor(GolightParser.DeclaexplicitanovalorContext context)
     {
+        string id = context.ID().GetText();
+        string tipoVariable = context.TIPO().GetText();
+        if (tipoVariable == "float64") {
+            tipoVariable = "float";
+        }
+        symbolTable.AddSymbol(new Utils.Symbol(id, tipoVariable, "local", context.Start.Line, context.Start.Column));
         return null;
     }
-
-public override Object VisitDeclaracionimplicita(GolightParser.DeclaracionimplicitaContext context)
+    public override Object VisitDeclaracionimplicita(GolightParser.DeclaracionimplicitaContext context)
     {
+        string id = context.ID().GetText();
+        
+        _isdeclaracion = true;
+        Visit(context.expresion());
+        _isdeclaracion = false;
+
+        // Obtener el valor según el tipo inferido
+        string valor = tipo switch
+        {
+            "int" => context.expresion().GetText(),
+            "float" => context.expresion().GetText(),
+            "string" => cadena,
+            "bool" => cadena,
+            "rune" => cadena,
+            _ => throw new Exception($"Tipo no soportado: {tipo}")
+        };
+
+        symbolTable.AddSymbol(new Utils.Symbol(id, tipo, "local", context.Start.Line, context.Start.Column, valor));
         return null;
     }
-
-
     public override Object VisitAsignacionslicesimple(GolightParser.AsignacionslicesimpleContext context)
     {
  
@@ -198,7 +289,23 @@ public override Object VisitDeclaracionimplicita(GolightParser.Declaracionimplic
     }
     public override Object VisitAsignacion(GolightParser.AsignacionContext context)
     {
+        _comesfromasign = true;
+        string id = context.expresion(0).GetText();
+        //Console.WriteLine("ID: " + id);
+        var symbol = symbolTable.GetSymbol(id);
+        string tipoVariable = symbol.Type;
+        Visit(context.expresion(1));
 
+
+        if (tipoVariable == "string" && !cadena.StartsWith("\""))
+        {   
+            Console.WriteLine("Cadena sin comillas: " + cadena);
+            cadena = $"\"{cadena}\"";
+            Console.WriteLine("Cadena con comillas: " + cadena);
+        }
+ 
+        symbolTable.UpdateSymbol(id, cadena);
+        _comesfromasign = false;
         return null;
     }
 
@@ -209,57 +316,314 @@ public override Object VisitDeclaracionimplicita(GolightParser.Declaracionimplic
     }
 
 
-    public override Object VisitSumres(GolightParser.SumresContext context)
+public override Object VisitSumres(GolightParser.SumresContext context) 
     {
         var operacion = context.op.Text;
-        Console.WriteLine(context.GetText());
-        Visit(context.expresion(0)); //Conseguimos el primer valor
-        Visit(context.expresion(1)); //Conseguimos el segundo valor        
-        codigo.pop(Registers.x1); //Cargamos el segundo valor en x1
-        codigo.pop(Registers.x0); //Cargamos el primer valor en x0
-        codigo.comentario($"Popeados ambos valores");
-        if (operacion == "+")
-        {
-            codigo.add(Registers.x0, Registers.x0, Registers.x1); //x0 = Valor 1 + Valor 2
-        }
-        else if (operacion == "-")
-        {
-            codigo.sub(Registers.x0, Registers.x0, Registers.x1); //x0 = Valor 1 - Valor 2
-        }
-        else
-        {
-            throw new Exception($"Operación no soportada: {operacion}");
-        }
-        codigo.push(Registers.x0); //Guardamos el resultado en la pila
-        return null;
-    }
+        if (_comesfromasign == true) {
+            Visit(context.expresion(0));
+            string tmp1 = tipo;
+            string val1;
+            
+            // Si es un ID, obtener el valor de la tabla de símbolos
+            if (context.expresion(0) is GolightParser.IdContext id1)
+            {
+                val1 =  cadena;
+                Console.WriteLine("val1: " + val1);
+            }
+            else
+            {
+                val1 = context.expresion(0).GetText();
+                Console.WriteLine("val1: " + val1);
+            }
 
+            Visit(context.expresion(1));
+            string tmp2 = tipo;
+            string val2;
+            
+            if (context.expresion(1) is GolightParser.IdContext id2)
+            {
+                val2 = cadena;
+                Console.WriteLine("val2: " + val2);
+            }
+            else
+            {
+                val2 = context.expresion(1).GetText();
+                Console.WriteLine("val2: " + val2);
+            }
+            if (tmp1 == "string" && tmp2 == "string")
+            {
+                if (operacion == "+")
+                {   
+                    val1 = val1.Substring(1, val1.Length - 2); // Eliminar comillas
+                    val2 = val2.Substring(1, val2.Length - 2); // Eliminar comillas 
+                    //Console.WriteLine("Cadena 1: " + val1 + " Cadena 2: " + val2);
+                    cadena = val1 + val2;
+                    tipo = "string";
+                    return null;
+                }
+                else
+                {
+                    throw new Exception("Operación no válida para strings");
+                }
+            }   
+            if (tmp1 == "float" || tmp2 == "float") 
+            {
+                double num1 = double.Parse(val1);
+                double num2 = double.Parse(val2);
+                double resultado;
+
+                if (operacion == "+")
+                    resultado = num1 + num2;
+                else
+                    resultado = num1 - num2;
+
+                tipo = "float";
+                cadena = resultado.ToString();
+            }
+            else 
+            {
+                int num1 = int.Parse(val1);
+                int num2 = int.Parse(val2);
+                int resultado;
+
+                if (operacion == "+")
+                    resultado = num1 + num2;
+                else
+                    resultado = num1 - num2;
+
+                tipo = "int";
+                cadena = resultado.ToString();
+            }
+            _comesfromasign = false;
+        } else {
+
+        Visit(context.expresion(0));
+        string tmp1 = tipo;
+
+        Visit(context.expresion(1));
+        string tmp2 = tipo;
+
+            if (tmp1 == "float" || tmp2 == "float") {
+                codigo.comentario($"Operación flotante: {tmp1} {operacion} {tmp2}");
+                if (tmp1 == "int") {
+                    codigo.popFloat();            // Pop del float a d1
+                    codigo.pop(Registers.x0);     // Pop del int
+                    codigo.IntToFloat();          // Convierte int en d0
+                } 
+                else if (tmp2 == "int") {
+                    codigo.pop(Registers.x0);     // Pop del int
+                    codigo.LoadIntToFloat(Registers.x0); // Convierte int a float en d1
+                    codigo.popFloat();            // Pop del primer float a d0
+                }
+                else {
+                    // Ambos son float
+                    codigo.popFloat();  // Pop segundo float a d1
+                    codigo.popFloat();  // Pop primer float a d0
+                }
+
+                if (operacion == "+") {
+                    codigo.addFloat(Registers.d0, Registers.d0, Registers.d1);
+                }
+                else if (operacion == "-") {
+                    codigo.subFloat(Registers.d0, Registers.d0, Registers.d1);
+                }
+                codigo.pushFloat();
+                tipo = "float";
+            }
+            else {
+                codigo.pop(Registers.x1);
+                codigo.pop(Registers.x0);
+                if (operacion == "+") {
+                    codigo.add(Registers.x0, Registers.x0, Registers.x1);
+                }
+                else if (operacion == "-") {
+                    codigo.sub(Registers.x0, Registers.x0, Registers.x1);
+                }
+                codigo.push(Registers.x0);
+                tipo = "int";
+            }
+        }
+        return null;
+    } 
     public override Object VisitMultdivmod(GolightParser.MultdivmodContext context)
     {
         var operacion = context.op.Text;
-        Console.WriteLine(context.GetText());
-        Visit(context.expresion(0)); //Conseguimos el primer valor
-        Visit(context.expresion(1)); //Conseguimos el segundo valor        
-        codigo.pop(Registers.x1); //Cargamos el segundo valor en x1
-        codigo.pop(Registers.x0); //Cargamos el primer valor en x0
-        codigo.comentario($"Popeados ambos valores");
-        if (operacion == "*")
+        if (_comesfromasign == true)     {
+        // Evaluar primera expresión
+        Visit(context.expresion(0));
+        string tipo1 = tipo;
+        string val1;
+        
+        // Si es un ID, obtener el valor de la tabla de símbolos
+        if (context.expresion(0) is GolightParser.IdContext id1)
         {
-            codigo.mul(Registers.x0, Registers.x0, Registers.x1); //x0 = Valor 1 * Valor 2
+            val1 = symbolTable.GetSymbol(id1.GetText()).Value;
         }
-        else if (operacion == "/")
+        else
         {
-            codigo.div(Registers.x0, Registers.x0, Registers.x1); //x0 = Valor 1 / Valor 2
+            val1 = context.expresion(0).GetText();
         }
-        else if (operacion == "%")
+
+        // Evaluar segunda expresión
+        Visit(context.expresion(1));
+        string tipo2 = tipo;
+        string val2;
+        
+        if (context.expresion(1) is GolightParser.IdContext id2)
         {
-            codigo.mod(Registers.x0, Registers.x0, Registers.x1); //x0 = Valor 1 % Valor 2
+            val2 = symbolTable.GetSymbol(id2.GetText()).Value;
+        }
+        else
+        {
+            val2 = context.expresion(1).GetText();
+        }
+
+        // Realizar operación según tipos
+        if (tipo1 == "float" || tipo2 == "float") 
+        {
+            double num1 = double.Parse(val1);
+            double num2 = double.Parse(val2);
+            double resultado;
+
+            switch (operacion)
+            {
+                case "*":
+                    resultado = num1 * num2;
+                    break;
+                case "/":
+                    resultado = num1 / num2;
+                    break;
+                default:
+                    throw new Exception($"Operación no válida para flotantes: {operacion}");
+            }
+
+            tipo = "float";
+            cadena = resultado.ToString();
         }
         else 
         {
-            throw new Exception($"Operación no soportada: {operacion}");
+            int num1 = int.Parse(val1);
+            int num2 = int.Parse(val2);
+            int resultado;
+
+            switch (operacion)
+            {
+                case "*":
+                    resultado = num1 * num2;
+                    break;
+                case "/":
+                    if (num1 % num2 == 0)
+                    {
+                        resultado = num1 / num2;
+                        tipo = "int";
+                    }
+                    else
+                    {
+                        double resultadoFloat = (double)num1 / num2;
+                        tipo = "float";
+                        cadena = resultadoFloat.ToString();
+                        return null;
+                    }
+                    break;
+                case "%":
+                    resultado = num1 % num2;
+                    break;
+                default:
+                    throw new Exception($"Operación no válida: {operacion}");
+            }
+
+            tipo = "int";
+            cadena = resultado.ToString();
+        }     
+        } else {
+        Visit(context.expresion(0));
+        string tmp1 = tipo;
+        Visit(context.expresion(1));
+        string tmp2 = tipo;
+        string tmpval1 = context.expresion(0).GetText();
+        string tmpval2 = context.expresion(1).GetText();
+        if (tmp1 == "float" || tmp2 == "float") {
+            codigo.comentario($"Operación flotante: {tmp1} {operacion} {tmp2}");
+            if (tmp1 == "int") {
+                codigo.popFloat();            // Pop del float a d1
+                codigo.pop(Registers.x0);     // Pop del int
+                codigo.IntToFloat();          // Convierte int en d0
+                
+                if (operacion == "/") {
+                    // Para división, no intercambiamos los operandos
+                    codigo.divFloat(Registers.d0, Registers.d0, Registers.d1);
+                } else {
+                    codigo.SwapFloats();          // Intercambia d0 y d1 para otras operaciones
+                    if (operacion == "*") {
+                        codigo.mulFloat(Registers.d0, Registers.d0, Registers.d1);
+                    }
+                }
+            } 
+            else if (tmp2 == "int") {
+                codigo.pop(Registers.x0);     // Pop del int
+                codigo.LoadIntToFloat(Registers.x0); // Convierte int a float en d1
+                codigo.popFloat();            // Pop del primer float a d0
+                
+                if (operacion != "/") {
+                    // Para multiplicación y suma, el orden no importa
+                    if (operacion == "*") {
+                        codigo.mulFloat(Registers.d0, Registers.d0, Registers.d1);
+                    }
+                } else {
+                    // Para división, mantener el orden correcto
+                    codigo.divFloat(Registers.d0, Registers.d0, Registers.d1);
+                }
+            }
+            else {
+                codigo.popFloat();  // Pop segundo float a d1
+                codigo.popFloat();  // Pop primer float a d0
+                if (operacion == "*") {
+                    codigo.mulFloat(Registers.d0, Registers.d0, Registers.d1);
+                }
+                else if (operacion == "/") {
+                    codigo.divFloat(Registers.d0, Registers.d0, Registers.d1);
+                }
+            }
+            
+            codigo.pushFloat();
+            tipo = "float";
         }
-        codigo.push(Registers.x0); //Guardamos el resultado en la pila
+        else {
+            codigo.pop(Registers.x1);
+            codigo.pop(Registers.x0);
+            if (operacion == "*") {
+                codigo.mul(Registers.x0, Registers.x0, Registers.x1);
+            }
+            else if (operacion == "/") {
+                if (int.TryParse(tmpval1, out int val1) && int.TryParse(tmpval2, out int val2)) {
+                    if (val1 % val2 != 0) {
+                        // La división resultará en flotante
+                        codigo.IntToFloat();  // Convierte dividendo a float
+                        codigo.mov(Registers.x0, val2);
+                        codigo.LoadIntToFloat(Registers.x0);  // Convierte divisor a float
+                        codigo.divFloat(Registers.d0, Registers.d0, Registers.d1);
+                        codigo.pushFloat();
+                        tipo = "float";
+                    } else {
+                        // División entera normal
+                        codigo.div(Registers.x0, Registers.x0, Registers.x1);
+                        codigo.push(Registers.x0);
+                        tipo = "int";
+                    }
+                } else {
+                    // Si no podemos determinar los valores, hacer división entera
+                    codigo.div(Registers.x0, Registers.x0, Registers.x1);
+                    codigo.push(Registers.x0);
+                    tipo = "int";
+                }
+            }
+            else if (operacion == "%") {
+                codigo.mod(Registers.x0, Registers.x0, Registers.x1);
+            }
+            codigo.push(Registers.x0);
+            tipo = "int";
+        }
+        }
         return null;
     }
 
@@ -285,6 +649,28 @@ public override Object VisitDeclaracionimplicita(GolightParser.Declaracionimplic
 
     public override Object VisitUnario(GolightParser.UnarioContext context)
     {
+            var operador = context.op.Text;
+    
+    if (_comesfromasign) 
+    {
+        Visit(context.expresion());
+        
+        if (operador == "!")
+        {
+            if (tipo == "bool")
+            {
+                // Negar el valor booleano
+                cadena = cadena.ToLower() == "true" ? "false" : "true";
+            }
+            else
+            {
+                throw new Exception($"No se puede aplicar el operador '!' a un tipo {tipo}");
+            }
+        } else {
+            throw new Exception($"Operador {operador} no válido para tipo {tipo}");
+        }
+        
+    }
         return null;
     }
 
@@ -526,5 +912,6 @@ private string EscapeString(string str)
     {
         return symbolTable;
     }
+
 
 }

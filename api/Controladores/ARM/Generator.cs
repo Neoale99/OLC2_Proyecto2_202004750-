@@ -1,16 +1,20 @@
 using System.Text;
 
-//public class StackObject {
-//    public emum StackObjectType {Int, Float, String, Bool}
-//    public StackObjectType Type {get; set;}
-//    public int Largo {get; set;}
-//    public int Profundidad {get; set;}
-//    public string? Id {get; set;}
-//}
+public class StackObject
+{
+    public enum StackObjectType    {Int,Float,String,Rune,Bool}
+    public StackObjectType Type { get; set; }
+    public string Name { get; set; }
+    public int Length { get; set; }
+    public int Depth { get; set; }
+}
 public class GeneradorARM{
 
     private readonly List<string> instruccionesARM = new List<string>();
     private readonly StandardLibrary stdlib = new StandardLibrary();
+    private List<StackObject> stack = new List<StackObject>();
+    private int depth = 0;
+
     public void add (string rd, string rs1, string rs2){
         instruccionesARM.Add($"ADD {rd}, {rs1}, {rs2}");
     }
@@ -32,6 +36,43 @@ public class GeneradorARM{
         instruccionesARM.Add($"MOV X1, {rs2}");  
 
         instruccionesARM.Add($"BL modulo");
+    }
+    public void addFloat(string rd, string rs1, string rs2) {
+        instruccionesARM.Add("// Suma de flotantes");
+        instruccionesARM.Add($"FADD {rd}, {rs1}, {rs2}");
+    }
+
+    public void subFloat(string rd, string rs1, string rs2) {
+        instruccionesARM.Add("// Resta de flotantes");
+        instruccionesARM.Add($"FSUB {rd}, {rs1}, {rs2}");
+    }
+
+    public void mulFloat(string rd, string rs1, string rs2) {
+        instruccionesARM.Add("// Multiplicación de flotantes");
+        instruccionesARM.Add($"FMUL {rd}, {rs1}, {rs2}");
+    }
+
+    public void divFloat(string rd, string rs1, string rs2) {
+        instruccionesARM.Add("// División de flotantes");
+        instruccionesARM.Add($"FDIV {rd}, {rs1}, {rs2}");
+    }
+
+    public void pushFloat() {
+        instruccionesARM.Add($"STR d0, [SP, #-16]!");
+    }
+
+    public void popFloat() {
+        instruccionesARM.Add($"LDR d1, [SP], #16");
+    }
+
+    public void IntToFloat() {
+        comentario("Convirtiendo entero a flotante");
+        instruccionesARM.Add($"SCVTF d0, x0");
+    }
+
+    public void LoadIntToFloat(string reg) {
+        comentario($"Cargando {reg} como flotante");
+        instruccionesARM.Add($"SCVTF d1, {reg}");
     }
     //Operaciones en memoria
     public void str (string rs, string rd, string offset){
@@ -64,6 +105,11 @@ public class GeneradorARM{
         instruccionesARM.Add($"BL print_integer");
     }
 
+    public void PrintNewLine()
+    {
+        stdlib.Use("print_newline2");
+        instruccionesARM.Add($"BL print_newline2");
+    }
     public void Printstr(string text)
     {
         stdlib.Use("print_string");
@@ -103,12 +149,17 @@ public class GeneradorARM{
         instruccionesARM.Add($"MOVK x0, #0x{(bits >> 32) & 0xFFFF:X4}, LSL #32");
         instruccionesARM.Add($"MOVK x0, #0x{(bits >> 48) & 0xFFFF:X4}, LSL #48");
         instruccionesARM.Add($"FMOV d0, x0");
-       // pushFloat("d0");
+        pushFloat();
     }
     public void PrintFloat()
     {
         stdlib.Use("print_float_asm");
         instruccionesARM.Add($"BL print_float_asm");
+    }
+    public void SwapFloats() {
+        instruccionesARM.Add("FMOV d2, d0");  // Backup d0
+        instruccionesARM.Add("FMOV d0, d1");  // Move d1 to d0
+        instruccionesARM.Add("FMOV d1, d2");  // Restore from backup to d1
     }
 
     public void comentario(string comentario){
@@ -118,7 +169,9 @@ public class GeneradorARM{
         var sb = new StringBuilder();
         sb.AppendLine(".data");
         sb.AppendLine("newline_char:");
-        sb.AppendLine(".ascii \"\\n\""); 
+        sb.AppendLine(".ascii \"\\n\"");
+        sb.AppendLine("space_char:");
+        sb.AppendLine(".ascii \" \""); 
         sb.AppendLine(".text");
         sb.AppendLine(".global _start");
         sb.AppendLine("_start:");
