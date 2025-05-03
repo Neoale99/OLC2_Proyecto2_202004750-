@@ -30,6 +30,9 @@ public class GeneradorARM{
     public void addi (string rd, string rs1, string imm){
         instruccionesARM.Add($"ADDI {rd}, {rs1}, #{imm}");
     }
+    public void subi (string rd, string rs1, string imm){
+        instruccionesARM.Add($"SUBI {rd}, {rs1}, #{imm}");
+    }
     public void mod(string rd, string rs1, string rs2){
         stdlib.Use("modulo");
         instruccionesARM.Add($"MOV X0, {rs1}");  
@@ -238,5 +241,35 @@ public class GeneradorARM{
         instruccionesARM.Add($"BLE {etiqueta}");
     }
 
+//Slices
+    public void AllocateSlice(int elementSize, int initialCapacity)
+    {
+        comentario($"Allocating slice with element size {elementSize} and capacity {initialCapacity}");
+        // Calcular el tamaño total necesario
+        mov(Registers.x0, elementSize * initialCapacity);
+        // Llamar a malloc o equivalente
+        instruccionesARM.Add("BL malloc");
+        // El puntero al slice estará en x0
+        // Guardarlo en stack o memoria según sea necesario
+    }
 
+    public void StoreSliceElement(string sliceBase, int index, string valueReg, int elementSize)
+    {
+        comentario($"Store element at index {index} in slice");
+        // Calcular la dirección del elemento
+        mov(Registers.x1, index * elementSize);
+        add(Registers.x1, Registers.x1, sliceBase);
+        // Almacenar el valor
+        str(valueReg, Registers.x1, "0");
+    }
+
+    public void LoadSliceElement(string destReg, string sliceBase, int index, int elementSize)
+    {
+        comentario($"Load element at index {index} from slice");
+        // Calcular la dirección del elemento
+        mov(Registers.x1, index * elementSize);
+        add(Registers.x1, Registers.x1, sliceBase);
+        // Cargar el valor
+        ldr(destReg, Registers.x1, "0");
+    }
 }

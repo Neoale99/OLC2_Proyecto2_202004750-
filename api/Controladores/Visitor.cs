@@ -77,8 +77,43 @@ public override Object VisitPrintln(GolightParser.PrintlnContext context)
         codigo.comentario("Print");
         foreach (var exp in context.expresion()) //Implementacion temporal unicamente para operaciones basicas con enteros.
         {
+
             Visit(exp);
             codigo.comentario("Imprimiendo");
+            if (tipo != null && tipo.StartsWith("[]"))
+                {
+                    
+                    if (exp is GolightParser.IdContext idContext)
+                    {
+                        string id = idContext.GetText();
+                        var simbolo = symbolTable.GetSymbol(id);
+                        
+                        if (simbolo != null && simbolo.SliceValues != null)
+                        {
+                            string sliceContent = "[";
+                            string tipoElemento = simbolo.Type.Substring(2); 
+                            
+                            for (int i = 0; i < simbolo.SliceValues.Count; i++)
+                            {
+                                var elemento = simbolo.SliceValues[i];
+                                
+                                if (i > 0) sliceContent += " ";
+                                
+                                if (tipoElemento == "string")
+                                    sliceContent += $"\"{elemento}\"";
+                                else
+                                    sliceContent += elemento?.ToString() ?? "null";
+                            }
+                            
+                            sliceContent += "]";
+                            codigo.Printstr(sliceContent);
+                            continue;
+                        }
+                    }
+                    
+                    codigo.Printstr("Error: No se puede imprimir el slice");
+                    continue;
+                }
             switch (tipo)
             {
                 case "int":
@@ -129,7 +164,11 @@ public override Object VisitPrintln(GolightParser.PrintlnContext context)
         var symbol = symbolTable.GetSymbol(id);
         var tmp = symbol.Value;
         tipo = symbol.Type;
-        //Console.WriteLine(tipo);
+        // Manejar tipos de slices
+        if (tipo != null && tipo.StartsWith("[]")) {
+            cadena = id; 
+        }
+
 
         switch (tipo)
         {
@@ -155,11 +194,19 @@ public override Object VisitPrintln(GolightParser.PrintlnContext context)
             case "rune":
                 cadena = symbol.Value;
                 break;
+            case "[]int":
+                cadena = id;
+                break;
+            case "[]string":
+                cadena = id;
+                break;
             default:
                 throw new Exception($"Tipo no soportado: {tipo}");
         }
         cadena = symbol.Value;
-        
+        if (tipo != null && tipo.StartsWith("[]")) {
+            cadena = id; 
+        }
         return null;
     }
 
@@ -272,17 +319,199 @@ public override Object VisitDeclaexplicitanovalor(GolightParser.Declaexplicitano
         symbolTable.AddSymbol(new Utils.Symbol(id, tipo, "local", context.Start.Line, context.Start.Column, valor));
         return null;
     }
-    public override Object VisitAsignacionslicesimple(GolightParser.AsignacionslicesimpleContext context)
+
+    public override Object VisitDeclaracionslicevalor(GolightParser.DeclaracionslicevalorContext ctx)
     {
- 
+        string id = ctx.ID().GetText();
+        string sliceType = ctx.TIPO().GetText();
+        
+        // Crear el símbolo del slice con tipo []tipoElemento y asegurar que SliceValues esté inicializado
+        var sliceSymbol = new Utils.Symbol(id, sliceType, "local", ctx.Start.Line, ctx.Start.Column, null);
+        
+        // Asegurar que SliceValues está correctamente inicializado
+        if (sliceSymbol.SliceValues == null)
+        {
+            sliceSymbol.SliceValues = new List<object>();
+        }
+        
+        // Agregar el símbolo a la tabla de símbolos
+        symbolTable.AddSymbol(sliceSymbol);
+        
+        // Procesar valores iniciales si existen
+        foreach (var valoresContext in ctx.valores())
+        {
+            Visit(valoresContext);
+            string tipoElemento = sliceType.Substring(2); // Quitamos "[]" del tipo
+            
+            object valorConvertido;
+            try {
+                valorConvertido = ConvertirSegunTipo(cadena, tipoElemento);
+            }
+            catch (Exception ex) {
+                throw new Exception($"Error al convertir valor '{cadena}' al tipo '{tipoElemento}': {ex.Message}");
+            }
+            
+            symbolTable.Append(id, valorConvertido);
+        }
+        
+        return null;
+    }
+
+    private object ConvertirSegunTipo(string valor, string tipo)
+    {
+        switch (tipo)
+        {
+            case "int":
+                return int.Parse(valor);
+            case "float":
+                return double.Parse(valor);
+            case "string":
+                // Si es una cadena con comillas, quitar las comillas
+                if (valor.StartsWith("\"") && valor.EndsWith("\""))
+                    return valor.Substring(1, valor.Length - 2);
+                return valor;
+            case "bool":
+                return bool.Parse(valor);
+            default:
+                return valor;
+        }
+    }
+    public override Object VisitDeclaracionslicenovalor(GolightParser.DeclaracionslicenovalorContext context)
+        {
+            string id = context.ID().GetText();
+            string sliceType = context.TIPO().GetText();
+
+            return null;
+        }
+    public override Object VisitAsignacionslicesimple(GolightParser.AsignacionslicesimpleContext ctx)
+    {   
+        string id = ctx.ID().GetText();
+        
+        Visit(ctx.valor()[0]);
+        int indice = int.Parse(cadena);
+        
+        Visit(ctx.expresion());
+        string valorAsignar = cadena;
+        string tipoValor = tipo;
+        string tipoSlice = symbolTable.GetSymbolType(id);
+        string tipoElemento = tipoSlice.Substring(2); 
+        
+        object valorConvertido = ConvertirSegunTipo(valorAsignar, tipoElemento);
+        
+        symbolTable.UpdateSliceElement(id, indice, valorConvertido);
+        
+        return null;
+    }
+    public override Object VisitSlicesdesc(GolightParser.SlicesdescContext context)
+    {
+        string id = context.ID().GetText();
+        
+        // Obtener el índice al que queremos acceder
+        Visit(context.valor()[0]);
+        int indice = int.Parse(cadena);
+        
+        // Verificar que el slice existe
+        var simbolo = symbolTable.GetSymbol(id);
+        if (simbolo == null)
+        {
+            throw new Exception($"El slice '{id}' no está definido");
+        }
+        
+        // Asegurarnos que SliceValues esté inicializado
+        if (simbolo.SliceValues == null)
+        {
+            throw new Exception($"{id} no es un slice o no está inicializado");
+        }
+        
+        // Verificar que el índice es válido
+        if (indice < 0 || indice >= simbolo.SliceValues.Count)
+        {
+            throw new Exception($"Índice fuera de rango: {indice}");
+        }
+        
+        // Obtener el valor del slice en el índice
+        var valor = simbolo.SliceValues[indice];
+        
+        // Establecer el tipo y cadena según el tipo del elemento
+        string tipoElemento = simbolo.Type.Substring(2); // Quitar "[]"
+        tipo = tipoElemento;
+        
+        // Convertir el valor a cadena según su tipo
+        switch (tipoElemento)
+        {
+            case "int":
+                cadena = valor.ToString();
+                break;
+            case "float":
+                cadena = valor.ToString();
+                break;
+            case "string":
+                cadena = $"\"{valor}\""; // Agregar comillas para strings
+                break;
+            case "bool":
+                cadena = valor.ToString().ToLower();
+                break;
+            default:
+                cadena = valor?.ToString() ?? "null";
+                break;
+        }
+        
         return null;
     }
 
     public override Object VisitSlices(GolightParser.SlicesContext context)
     {
+        foreach (var valoresContext in context.valores())
+        {
+            Visit(valoresContext); // Esto establecerá tipo y cadena
+        }
         return null;
     }
+    public override Object VisitDeclaracionimplicitaslice(GolightParser.DeclaracionimplicitasliceContext context)
+    {
+        string id = context.ID().GetText();
+        
+        string sliceType = "[]" + InferirTipoDeElementos(context);
 
+        // Crear el símbolo del slice
+        var sliceSymbol = new Utils.Symbol(id, sliceType, "local", context.Start.Line, context.Start.Column, null);
+        
+        // Agregar el símbolo a la tabla de símbolos
+        symbolTable.AddSymbol(sliceSymbol);
+        
+        // Procesar los valores iniciales del slice
+        foreach (var slicesContext in context.slices())
+        {
+            foreach (var valorContext in slicesContext.valores())
+            {
+                Visit(valorContext);
+                string tipoElemento = sliceType.Substring(2); // Quitamos "[]" del tipo
+                object valorConvertido;
+                try {
+                    valorConvertido = ConvertirSegunTipo(cadena, tipoElemento);
+                }
+                catch (Exception ex) {
+                    throw new Exception($"Error al convertir valor '{cadena}' al tipo '{tipoElemento}': {ex.Message}");
+                }
+                
+                symbolTable.Append(id, valorConvertido);
+            }
+        }
+        
+        return null;
+    }
+    private string InferirTipoDeElementos(GolightParser.DeclaracionimplicitasliceContext context)
+    {
+        if (context.slices().Length > 0 && context.slices()[0].valores().Length > 0)
+        {
+            var primerValor = context.slices()[0].valores()[0];
+            Console.WriteLine("Primer valor: " + primerValor.GetText());
+            Visit(primerValor);
+            return tipo; 
+        }
+
+        return "any";
+    }
     public override Object VisitAsignacionmetodos(GolightParser.AsignacionmetodosContext context)
     {
 
@@ -816,11 +1045,44 @@ public override Object VisitAnd(GolightParser.AndContext context)
     }
     public override Object VisitAtoi(GolightParser.AtoiContext context)
     {
+        string cadenaNumero = context.CADENA().GetText();
+
+        cadenaNumero = cadenaNumero.Substring(1, cadenaNumero.Length - 2);
+        
+        if (int.TryParse(cadenaNumero, out int resultado))
+        {
+            codigo.comentario($"Convirtiendo string a int: {cadenaNumero}");
+            codigo.mov(Registers.x0, resultado);
+            codigo.push(Registers.x0);
+            tipo = "int";
+            cadena = resultado.ToString();
+        }
+        else
+        {
+            throw new Exception($"Error al convertir '{cadenaNumero}' a entero");
+        }
+        
         return null;
     }
 
     public override Object VisitParsefloat(GolightParser.ParsefloatContext context)
     {
+        string cadenaNumero = context.CADENA().GetText();
+
+        cadenaNumero = cadenaNumero.Substring(1, cadenaNumero.Length - 2);
+        
+        if (double.TryParse(cadenaNumero, out double resultado))
+        {
+            codigo.comentario($"Convirtiendo string a float: {cadenaNumero}");
+            codigo.LoadFloatBits(resultado);
+            tipo = "float";
+            cadena = resultado.ToString();
+        }
+        else
+        {
+            throw new Exception($"Error al convertir '{cadenaNumero}' a float");
+        }
+        
         return null;
     }
 
@@ -980,30 +1242,167 @@ public override Object VisitFor2(GolightParser.For2Context context)
         return null;
     }
 
-    public override Object VisitLen(GolightParser.LenContext context)
-    {
-        return null;
-    }
-
-
-
-    public override Object VisitJoin(GolightParser.JoinContext context)
-    {
-        return null;
-    }
-
-
-
-    public override Object VisitIndex(GolightParser.IndexContext context)
-    {
-        return null;
-    }
+public override Object VisitIndex(GolightParser.IndexContext ctx)
+{
+    // Obtener la cadena
+    Visit(ctx.ID());
+    string cadenaABuscar = cadena;
     
-    public override Object VisitAppend(GolightParser.AppendContext context)
+    // Obtener la letra/subcadena a buscar
+    string subcadena = ctx.valor().GetText();
+    subcadena = subcadena.Substring(1, subcadena.Length - 2); // Quitar comillas
+    
+    // Buscar el índice
+    int indice = cadenaABuscar.IndexOf(subcadena);
+    
+    // Establecer tipo y valor de retorno
+    tipo = "int";
+    cadena = indice.ToString();
+    
+    // Manejo de ARM
+    codigo.comentario($"Índice de '{subcadena}' en '{cadenaABuscar}': {indice}");
+    codigo.mov(Registers.x0, indice);
+    codigo.push(Registers.x0);
+    
+    return null;
+}
+
+    public override Object VisitJoin(GolightParser.JoinContext ctx)
     {
+        // Obtener el slice a unir
+        string sliceId = ctx.ID().GetText();
+        var simbolo = symbolTable.GetSymbol(sliceId);
+        
+        if (simbolo == null || simbolo.SliceValues == null)
+        {
+            throw new Exception($"'{sliceId}' no es un slice válido");
+        }
+        
+        // Obtener el separador
+        string separador = ctx.CADENA().GetText();
+        separador = separador.Substring(1, separador.Length - 2); // Quitar comillas
+        
+        // Verificar que el slice es de strings
+        string tipoElemento = simbolo.Type.Substring(2); // Quitar "[]"
+        if (tipoElemento != "string")
+        {
+            throw new Exception($"La función join espera un slice de strings, pero recibió {simbolo.Type}");
+        }
+        
+        // Unir los elementos del slice
+        string resultado = "";
+        for (int i = 0; i < simbolo.SliceValues.Count; i++)
+        {
+            if (i > 0) resultado += separador;
+            resultado += simbolo.SliceValues[i]?.ToString() ?? "";
+        }
+        
+        // Establecer tipo y valor de retorno
+        tipo = "string";
+        cadena = resultado;
+        
+        // Manejo de ARM
+        codigo.comentario($"Join de '{sliceId}' con separador '{separador}': '{resultado}'");
+        codigo.Printstr(resultado);
+        
         return null;
     }
 
+    public override Object VisitLen(GolightParser.LenContext ctx)
+    {
+        // Obtener el identificador del slice o cadena
+        string id = ctx.expresion().GetText();
+        var simbolo = symbolTable.GetSymbol(id);
+        
+        if (simbolo == null)
+        {
+            throw new Exception($"La variable '{id}' no está definida");
+        }
+        
+        int longitud;
+        
+        // Determinar la longitud según el tipo
+        if (simbolo.Type.StartsWith("[]"))
+        {
+            // Es un slice
+            if (simbolo.SliceValues == null)
+            {
+                longitud = 0;
+            }
+            else
+            {
+                longitud = simbolo.SliceValues.Count;
+            }
+        }
+        else if (simbolo.Type == "string")
+        {
+            // Es una cadena
+            string valor = simbolo.Value;
+            if (valor.StartsWith("\"") && valor.EndsWith("\""))
+            {
+                valor = valor.Substring(1, valor.Length - 2); // Quitar comillas
+            }
+            longitud = valor.Length;
+        }
+        else
+        {
+            throw new Exception($"La función len no se puede aplicar a una variable de tipo {simbolo.Type}");
+        }
+        
+        // Establecer tipo y valor de retorno
+        tipo = "int";
+        cadena = longitud.ToString();
+        
+        // Manejo de ARM
+        codigo.comentario($"Longitud de '{id}': {longitud}");
+        codigo.mov(Registers.x0, longitud);
+        codigo.push(Registers.x0);
+        
+        return null;
+    }
+
+    public override Object VisitAppend(GolightParser.AppendContext ctx)
+    {
+        // Obtener el slice al que se añadirá el elemento
+        string sliceId = ctx.ID().GetText();
+        var simbolo = symbolTable.GetSymbol(sliceId);
+        
+        if (simbolo == null)
+        {
+            throw new Exception($"La variable '{sliceId}' no está definida");
+        }
+        
+        if (!simbolo.Type.StartsWith("[]"))
+        {
+            throw new Exception($"La función append espera un slice, pero '{sliceId}' es de tipo {simbolo.Type}");
+        }
+        
+        // Obtener el elemento a añadir
+        Visit(ctx.expresion());
+        string valorAAppend = cadena;
+        string tipoValor = tipo;
+        
+        // Verificar compatibilidad de tipos
+        string tipoElemento = simbolo.Type.Substring(2); // Quitar "[]"
+        if (tipoElemento != tipoValor && !(tipoElemento == "float" && tipoValor == "int"))
+        {
+            throw new Exception($"No se puede añadir un valor de tipo {tipoValor} a un slice de tipo {simbolo.Type}");
+        }
+        
+        // Convertir el valor al tipo correcto
+        object valorConvertido = ConvertirSegunTipo(valorAAppend, tipoElemento);
+        
+        // Añadir el elemento al slice
+        symbolTable.Append(sliceId, valorConvertido);
+        
+        // La función append devuelve el slice modificado
+        tipo = simbolo.Type;
+        cadena = sliceId;
+        
+        codigo.comentario($"Append a '{sliceId}': valor {valorAAppend}");
+        
+        return null;
+    }
 
 
     public override Object VisitExpdotexp1(GolightParser.Expdotexp1Context context)

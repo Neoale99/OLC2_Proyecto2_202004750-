@@ -190,7 +190,7 @@ public class Symbol
     public int Line { get; }
     public int Column { get; }
     public string Value { get; set; } // Permitimos set para actualizar valores
-
+    public List<object> SliceValues { get;set; } 
     public Symbol(string name, string type, string scope, int line, int column, string value = null)
     {
         Name = name;
@@ -198,7 +198,12 @@ public class Symbol
         Scope = scope;
         Line = line;
         Column = column;
-        Value = value ?? GetDefaultValue(type); // Valor por defecto según el tipo
+        Value = value ?? GetDefaultValue(type); 
+
+        if (type != null && type.StartsWith("[]"))
+        {
+            SliceValues = new List<object>();
+        }
     }
 
      public static string GetDefaultValue(string type)
@@ -300,8 +305,76 @@ public class SymbolTable
         }
 
         symbol.Value = newValue;
+    }public void Append(string name, object value)
+{
+    var symbol = GetSymbol(name);
+    if (symbol == null)
+        throw new Exception($"Símbolo '{name}' no encontrado");
+    
+    if (symbol.SliceValues == null)
+        symbol.SliceValues = new List<object>();
+        
+    symbol.SliceValues.Add(value);
+}
+
+    public void UpdateSliceElement(string name, int index, object value)
+    {
+        var symbol = GetSymbol(name);
+        if (symbol == null)
+            throw new Exception($"Símbolo '{name}' no encontrado");
+        
+        if (symbol.SliceValues == null)
+            throw new Exception($"{name} no es un slice");
+        
+        // Si el índice es igual a la longitud, hacemos un append
+        if (index == symbol.SliceValues.Count)
+        {
+            symbol.SliceValues.Add(value);
+            return;
+        }
+        
+        // Si el índice es mayor que la longitud actual, rellenamos con valores por defecto
+        if (index > symbol.SliceValues.Count)
+        {
+            string tipoElemento = symbol.Type.Substring(2); // Quitar "[]"
+            object valorPorDefecto = GetDefaultValueForType(tipoElemento);
+            
+            while (symbol.SliceValues.Count < index)
+            {
+                symbol.SliceValues.Add(valorPorDefecto);
+            }
+            symbol.SliceValues.Add(value);
+            return;
+        }
+        
+        // Para índices dentro del rango actual
+        symbol.SliceValues[index] = value;
+    }
+    public int IndexOf(string name, object value)
+    {
+        var sym = GetSymbol(name);
+        return sym.SliceValues?.IndexOf(value) ?? -1;
     }
 
+    public string Join(string name, string sep)
+    {
+        var sym = GetSymbol(name);
+        if (sym.SliceValues == null || !sym.Type.Equals("[]string"))
+            throw new Exception("Join sólo para []string.");
+        return string.Join(sep, sym.SliceValues.Cast<string>());
+    }
+
+    private object GetDefaultValueForType(string tipo)
+    {
+        switch (tipo)
+        {
+            case "int": return 0;
+            case "float": return 0.0;
+            case "string": return "";
+            case "bool": return false;
+            default: return null;
+        }
+    }
     public bool ContainsSymbol(string name)
     {
         return symbols.ContainsKey(name);
@@ -321,8 +394,28 @@ public class SymbolTable
         }
         throw new Exception($"Error: La variable '{name}' no está definida.");
     }
+    // Método adicional para obtener el valor de un elemento específico del slice
+    public object GetSliceElement(string name, int index)
+    {
+        var sym = GetSymbol(name);
+        if (sym.SliceValues == null)
+            throw new Exception($"{name} no es un slice.");
+            
+        if (index < 0 || index >= sym.SliceValues.Count)
+            throw new Exception($"Índice fuera de rango: {index}");
+            
+        return sym.SliceValues[index];
+    }
+
+    // Método para obtener el tamaño de un slice
+    public int GetSliceLength(string name)
+    {
+        var sym = GetSymbol(name);
+        if (sym.SliceValues == null)
+            throw new Exception($"{name} no es un slice.");
+            
+        return sym.SliceValues.Count;
+    }
 }
+
 }
-
-
-
